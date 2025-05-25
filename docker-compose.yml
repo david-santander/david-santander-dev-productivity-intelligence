@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    ports:
+      - "3000:3000"
+      - "222:22"
+    volumes:
+      - gitea_data:/data
+      - ./gitea_config/app.ini:/data/gitea/conf/app.ini # Mount your custom app.ini
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    ports:
+      - "8080:8080"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+    depends_on:
+      - gitea
+      - sonarqube
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  sonarqube:
+    image: sonarqube:latest
+    container_name: sonarqube
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - app_net
+    restart: unless-stopped
+
+networks:
+  app_net:
+    driver: bridge
+
+volumes:
+  gitea_data:
+  jenkins_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
