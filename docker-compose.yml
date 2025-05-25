@@ -41,6 +41,143 @@ services:
       - app_net
     restart: unless-stopped
 
+  # PostgreSQL for SonarQube metrics storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-metrics
+    environment:
+      POSTGRES_DB: sonarqube_metrics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sonarqube-database/postgres/init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  # PostgreSQL for Airflow metadata
+  postgres-airflow:
+    image: postgres:15-alpine
+    container_name: postgres-airflow
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  # Redis for Airflow (optional, for CeleryExecutor)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  # Airflow webserver
+  airflow-webserver:
+    build: ./sonarqube-etl
+    container_name: airflow-webserver
+    depends_on:
+      - postgres-airflow
+      - redis
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      # SonarQube configuration
+      AIRFLOW_VAR_SONARQUBE_BASE_URL: 'http://sonarqube:9000'
+      AIRFLOW_VAR_SONARQUBE_TOKEN: 'squ_34a1a84bd11058208c852fc67f06416919f24d74'
+      # Connection to metrics database
+      AIRFLOW_CONN_SONARQUBE_METRICS_DB: 'postgresql://postgres:postgres@postgres:5432/sonarqube_metrics'
+    volumes:
+      - ./sonarqube-etl/airflow/dags:/opt/airflow/dags
+      - ./sonarqube-etl/airflow/logs:/opt/airflow/logs
+      - ./sonarqube-etl/airflow/plugins:/opt/airflow/plugins
+    ports:
+      - "8082:8080"
+    command: webserver
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  # Airflow scheduler
+  airflow-scheduler:
+    build: ./sonarqube-etl
+    container_name: airflow-scheduler
+    depends_on:
+      - postgres-airflow
+      - redis
+      - airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      # SonarQube configuration
+      AIRFLOW_VAR_SONARQUBE_BASE_URL: 'http://sonarqube:9000'
+      AIRFLOW_VAR_SONARQUBE_TOKEN: 'squ_34a1a84bd11058208c852fc67f06416919f24d74'
+      # Connection to metrics database
+      AIRFLOW_CONN_SONARQUBE_METRICS_DB: 'postgresql://postgres:postgres@postgres:5432/sonarqube_metrics'
+    volumes:
+      - ./sonarqube-etl/airflow/dags:/opt/airflow/dags
+      - ./sonarqube-etl/airflow/logs:/opt/airflow/logs
+      - ./sonarqube-etl/airflow/plugins:/opt/airflow/plugins
+    command: scheduler
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  # Airflow init (for database initialization)
+  airflow-init:
+    build: ./sonarqube-etl
+    container_name: airflow-init
+    depends_on:
+      - postgres-airflow
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: 'admin'
+      _AIRFLOW_WWW_USER_PASSWORD: 'admin'
+      _AIRFLOW_WWW_USER_FIRSTNAME: 'Admin'
+      _AIRFLOW_WWW_USER_LASTNAME: 'User'
+      _AIRFLOW_WWW_USER_EMAIL: 'admin@example.com'
+    command: version
+    networks:
+      - app_net
+
+  # Streamlit dashboard
+  streamlit-dashboard:
+    build: ./sonarqube-dashboard
+    container_name: streamlit-dashboard
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: sonarqube_metrics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "8501:8501"
+    networks:
+      - app_net
+    restart: unless-stopped
+
 networks:
   app_net:
     driver: bridge
@@ -51,3 +188,5 @@ volumes:
   sonarqube_data:
   sonarqube_extensions:
   sonarqube_logs:
+  postgres_data:
+  postgres_airflow_data:

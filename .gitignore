@@ -1,0 +1,80 @@
+# Credentials and sensitive files
+credentials.json
+.env
+.env.local
+.env.*.local
+
+# Docker override files
+docker-compose.override.yml
+
+# Airflow logs and temporary files
+sonarqube-etl/airflow/logs/
+sonarqube-etl/airflow/airflow-webserver.pid
+sonarqube-etl/airflow/airflow.db
+sonarqube-etl/airflow/standalone_admin_password.txt
+sonarqube-etl/airflow/webserver_config.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jenkins
+jenkins_home/
+
+# SonarQube
+.scannerwork/
+sonar-project.properties.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+tmp/
+temp/
