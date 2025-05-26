@@ -74,6 +74,44 @@ CREATE TABLE IF NOT EXISTS daily_project_metrics (
     coverage_percentage DECIMAL(5,2),
     duplicated_lines_density DECIMAL(5,2),
     
+    -- Quality ratings
+    reliability_rating CHAR(1),
+    security_rating CHAR(1),
+    sqale_rating CHAR(1),
+    
+    -- New code metrics
+    new_code_bugs_total INTEGER DEFAULT 0,
+    new_code_bugs_blocker INTEGER DEFAULT 0,
+    new_code_bugs_critical INTEGER DEFAULT 0,
+    new_code_bugs_major INTEGER DEFAULT 0,
+    new_code_bugs_minor INTEGER DEFAULT 0,
+    new_code_bugs_info INTEGER DEFAULT 0,
+    
+    new_code_vulnerabilities_total INTEGER DEFAULT 0,
+    new_code_vulnerabilities_critical INTEGER DEFAULT 0,
+    new_code_vulnerabilities_high INTEGER DEFAULT 0,
+    new_code_vulnerabilities_medium INTEGER DEFAULT 0,
+    new_code_vulnerabilities_low INTEGER DEFAULT 0,
+    
+    new_code_code_smells_total INTEGER DEFAULT 0,
+    new_code_code_smells_blocker INTEGER DEFAULT 0,
+    new_code_code_smells_critical INTEGER DEFAULT 0,
+    new_code_code_smells_major INTEGER DEFAULT 0,
+    new_code_code_smells_minor INTEGER DEFAULT 0,
+    new_code_code_smells_info INTEGER DEFAULT 0,
+    
+    new_code_security_hotspots_total INTEGER DEFAULT 0,
+    new_code_security_hotspots_high INTEGER DEFAULT 0,
+    new_code_security_hotspots_medium INTEGER DEFAULT 0,
+    new_code_security_hotspots_low INTEGER DEFAULT 0,
+    new_code_security_hotspots_to_review INTEGER DEFAULT 0,
+    new_code_security_hotspots_reviewed INTEGER DEFAULT 0,
+    
+    new_code_coverage_percentage DECIMAL(5,2),
+    new_code_duplicated_lines_density DECIMAL(5,2),
+    new_code_lines INTEGER DEFAULT 0,
+    new_code_period_date DATE,
+    
     -- Metadata
     data_source_timestamp TIMESTAMP NOT NULL,
     is_carried_forward BOOLEAN DEFAULT FALSE,

@@ -97,43 +97,49 @@ def calculate_trend(current_value: float, previous_value: float, threshold: floa
     else:
         return "↓", "down"
 
-def get_metric_value(df: pd.DataFrame, metric_name: str, severity: str = None, status: str = None) -> float:
+def get_metric_value(df: pd.DataFrame, metric_name: str, severity: str = None, status: str = None, code_scope: str = "Overall Code") -> float:
     """Get the latest metric value from dataframe"""
     if df.empty:
         return 0
     
     latest = df.iloc[0]
     
+    # Determine column prefix based on code scope
+    prefix = "new_code_" if code_scope == "New Code" else ""
+    
     if metric_name == 'Bugs':
         if severity:
-            return latest[f'bugs_{severity.lower()}']
+            return latest[f'{prefix}bugs_{severity.lower()}']
         elif status:
-            return latest[f'bugs_{status.lower()}']
+            return latest[f'bugs_{status.lower()}'] if code_scope == "Overall Code" else 0
         else:
-            return latest['bugs_total']
+            return latest[f'{prefix}bugs_total']
     elif metric_name == 'Vulnerabilities':
         if severity:
-            return latest[f'vulnerabilities_{severity.lower()}']
+            return latest[f'{prefix}vulnerabilities_{severity.lower()}']
         elif status:
-            return latest[f'vulnerabilities_{status.lower()}']
+            return latest[f'vulnerabilities_{status.lower()}'] if code_scope == "Overall Code" else 0
         else:
-            return latest['vulnerabilities_total']
+            return latest[f'{prefix}vulnerabilities_total']
     elif metric_name == 'Code Smells':
         if severity:
-            return latest[f'code_smells_{severity.lower()}']
+            return latest[f'{prefix}code_smells_{severity.lower()}']
         else:
-            return latest['code_smells_total']
+            return latest[f'{prefix}code_smells_total']
     elif metric_name == 'Security Hotspots':
         if severity:
-            return latest[f'security_hotspots_{severity.lower()}']
+            return latest[f'{prefix}security_hotspots_{severity.lower()}']
         elif status:
-            return latest[f'security_hotspots_{status.lower().replace(" ", "_")}']
+            col_name = f'{prefix}security_hotspots_{status.lower().replace(" ", "_")}'
+            return latest[col_name] if col_name in latest else 0
         else:
-            return latest['security_hotspots_total']
+            return latest[f'{prefix}security_hotspots_total']
     elif metric_name == 'Coverage':
-        return latest['coverage_percentage']
+        return latest[f'{prefix}coverage_percentage']
     elif metric_name == 'Duplications':
-        return latest['duplicated_lines_density']
+        return latest[f'{prefix}duplicated_lines_density']
+    elif metric_name == 'New Lines' and code_scope == "New Code":
+        return latest.get('new_code_lines', 0)
     
     return 0
 
@@ -168,6 +174,13 @@ def main():
     
     # Sidebar filters
     st.sidebar.header("🔍 Filters")
+    
+    # Code scope toggle
+    code_scope = st.sidebar.radio(
+        "📊 Metrics Scope",
+        options=["Overall Code", "New Code", "Comparison"],
+        help="Choose whether to view metrics for overall code, new code only, or a comparison"
+    )
     
     # Fetch available projects
     projects = fetch_projects()
@@ -287,40 +300,82 @@ def main():
             comparison_date = pd.Timestamp(start_date - timedelta(days=date_diff))
             
             # Section 1: KPI Cards
-            st.header("📊 Key Performance Indicators")
-            
-            # Create columns for KPI cards
-            cols = st.columns(len(selected_metrics))
-            
-            for idx, metric in enumerate(selected_metrics):
-                with cols[idx]:
-                    # Get current and previous values
-                    current_df = df[df['metric_date'] == df['metric_date'].max()]
+            if code_scope == "Comparison":
+                st.header("📊 Overall vs New Code Comparison")
+                
+                # For comparison view, show metrics in pairs
+                for metric in selected_metrics:
+                    col1, col2, col3 = st.columns([2, 2, 1])
                     
-                    if len(selected_project_ids) > 1:
-                        # Aggregate across projects
-                        current_value = current_df.apply(lambda row: get_metric_value(pd.DataFrame([row]), metric), axis=1).sum()
-                    else:
-                        current_value = get_metric_value(current_df, metric)
-                    
-                    # Get previous value for trend
-                    previous_df = df[df['metric_date'] <= comparison_date]
-                    if not previous_df.empty:
-                        if len(selected_project_ids) > 1:
-                            previous_value = previous_df.iloc[0:len(selected_project_ids)].apply(
-                                lambda row: get_metric_value(pd.DataFrame([row]), metric), axis=1
-                            ).sum()
+                    # Overall Code
+                    with col1:
+                        st.subheader(f"Overall {metric}")
+                        current_df = df[df['metric_date'] == df['metric_date'].max()]
+                        current_value = get_metric_value(current_df, metric, code_scope="Overall Code")
+                        previous_df = df[df['metric_date'] <= comparison_date]
+                        if not previous_df.empty:
+                            previous_value = get_metric_value(previous_df, metric, code_scope="Overall Code")
                         else:
-                            previous_value = get_metric_value(previous_df, metric)
-                    else:
-                        previous_value = current_value
+                            previous_value = current_value
+                        trend_indicator, trend_direction = calculate_trend(current_value, previous_value)
+                        is_percentage = metric in ['Coverage', 'Duplications']
+                        render_kpi_card(f"Overall {metric}", current_value, trend_indicator, trend_direction, is_percentage)
                     
-                    # Calculate trend
-                    trend_indicator, trend_direction = calculate_trend(current_value, previous_value)
+                    # New Code
+                    with col2:
+                        st.subheader(f"New Code {metric}")
+                        current_value_new = get_metric_value(current_df, metric, code_scope="New Code")
+                        if not previous_df.empty:
+                            previous_value_new = get_metric_value(previous_df, metric, code_scope="New Code")
+                        else:
+                            previous_value_new = current_value_new
+                        trend_indicator_new, trend_direction_new = calculate_trend(current_value_new, previous_value_new)
+                        render_kpi_card(f"New {metric}", current_value_new, trend_indicator_new, trend_direction_new, is_percentage)
                     
-                    # Render KPI card
-                    is_percentage = metric in ['Coverage', 'Duplications']
-                    render_kpi_card(metric, current_value, trend_indicator, trend_direction, is_percentage)
+                    # Comparison Info
+                    with col3:
+                        st.subheader("New Lines")
+                        new_lines = get_metric_value(current_df, "New Lines", code_scope="New Code")
+                        st.metric("Lines Added", f"{int(new_lines):,}")
+                        
+                        if current_value > 0:
+                            new_percentage = (current_value_new / current_value) * 100
+                            st.metric("New/Overall %", f"{new_percentage:.1f}%")
+            else:
+                st.header(f"📊 {code_scope} Key Performance Indicators")
+                
+                # Create columns for KPI cards
+                cols = st.columns(len(selected_metrics))
+                
+                for idx, metric in enumerate(selected_metrics):
+                    with cols[idx]:
+                        # Get current and previous values
+                        current_df = df[df['metric_date'] == df['metric_date'].max()]
+                        
+                        if len(selected_project_ids) > 1:
+                            # Aggregate across projects
+                            current_value = current_df.apply(lambda row: get_metric_value(pd.DataFrame([row]), metric, code_scope=code_scope), axis=1).sum()
+                        else:
+                            current_value = get_metric_value(current_df, metric, code_scope=code_scope)
+                        
+                        # Get previous value for trend
+                        previous_df = df[df['metric_date'] <= comparison_date]
+                        if not previous_df.empty:
+                            if len(selected_project_ids) > 1:
+                                previous_value = previous_df.iloc[0:len(selected_project_ids)].apply(
+                                    lambda row: get_metric_value(pd.DataFrame([row]), metric, code_scope=code_scope), axis=1
+                                ).sum()
+                            else:
+                                previous_value = get_metric_value(previous_df, metric, code_scope=code_scope)
+                        else:
+                            previous_value = current_value
+                        
+                        # Calculate trend
+                        trend_indicator, trend_direction = calculate_trend(current_value, previous_value)
+                        
+                        # Render KPI card
+                        is_percentage = metric in ['Coverage', 'Duplications']
+                        render_kpi_card(metric, current_value, trend_indicator, trend_direction, is_percentage)
             
             # Section 2: Trends Over Time
             st.header("📈 Trends Over Time")
@@ -336,7 +391,7 @@ def main():
                     for _, project_group in df.groupby('sonarqube_project_key'):
                         project_name = project_group.iloc[0]['project_name']
                         dates = pd.to_datetime(project_group['metric_date']).dt.date
-                        values = project_group.apply(lambda row: get_metric_value(pd.DataFrame([row]), metric), axis=1)
+                        values = project_group.apply(lambda row: get_metric_value(pd.DataFrame([row]), metric, code_scope=code_scope), axis=1)
                         
                         for date, value in zip(dates, values):
                             trend_data.append({

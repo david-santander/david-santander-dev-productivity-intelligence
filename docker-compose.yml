@@ -178,6 +178,25 @@ services:
       - app_net
     restart: unless-stopped
 
+  # PgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+      - postgres-airflow
+    networks:
+      - app_net
+    restart: unless-stopped
+
 networks:
   app_net:
     driver: bridge
@@ -190,3 +209,4 @@ volumes:
   sonarqube_logs:
   postgres_data:
   postgres_airflow_data:
+  pgadmin_data:

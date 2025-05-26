@@ -67,6 +67,38 @@
     * Enter the project key `dev.productivity:django-sample-app`.
     * Enter the main branch name `main`.
 
+## PgAdmin Setup (Database Management)
+
+1. **Access PgAdmin:** Open your web browser and go to `http://localhost:5050`.
+2. **Login:** Use the following credentials:
+    * Email: `admin@example.com`
+    * Password: `admin`
+3. **Add PostgreSQL Servers:**
+    * Right-click on "Servers" in the left panel and select "Register" -> "Server".
+    * **For SonarQube Metrics Database:**
+        * General tab:
+            * Name: `SonarQube Metrics DB`
+        * Connection tab:
+            * Host: `postgres`
+            * Port: `5432`
+            * Database: `sonarqube_metrics`
+            * Username: `postgres`
+            * Password: `postgres`
+        * Save the configuration.
+    * **For Airflow Metadata Database:**
+        * General tab:
+            * Name: `Airflow DB`
+        * Connection tab:
+            * Host: `postgres-airflow`
+            * Port: `5432`
+            * Database: `airflow`
+            * Username: `airflow`
+            * Password: `airflow`
+        * Save the configuration.
+4. **View Metrics Data:**
+    * Navigate to `SonarQube Metrics DB` -> `Databases` -> `sonarqube_metrics` -> `Schemas` -> `public` -> `Tables`.
+    * You can view the metrics data stored in the tables created by the ETL pipeline.
+
 ## Jenkins Setup
 
 1. **Access Jenkins:** Open your web browser and go to `http://localhost:8080`.

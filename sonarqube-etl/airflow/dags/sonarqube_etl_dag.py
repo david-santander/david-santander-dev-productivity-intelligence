@@ -28,8 +28,36 @@ dag = DAG(
     default_args=default_args,
     description='ETL process to extract SonarQube metrics and load into PostgreSQL',
     schedule_interval='0 2 * * *',  # Run at 2 AM daily
-    catchup=False,
+    catchup=False,  # Disable catchup - use dedicated backfill DAG instead
     max_active_runs=1,
+    doc_md="""
+    ## SonarQube ETL DAG
+    
+    This DAG extracts metrics from SonarQube and loads them into PostgreSQL for dashboard visualization.
+    
+    ### Regular Execution
+    - Runs daily at 2 AM
+    - Extracts metrics for the previous day
+    - Handles carry-forward for missing data
+    
+    ### Features
+    - Extracts both overall and new code metrics
+    - Tracks issue severity breakdowns
+    - Monitors code quality trends
+    - Supports multiple projects
+    
+    ### For Historical Data Backfill
+    
+    Use the dedicated `sonarqube_etl_backfill` DAG for backfilling historical data.
+    
+    ```bash
+    # Backfill year-to-date
+    airflow dags trigger sonarqube_etl_backfill
+    
+    # Backfill specific range
+    airflow dags trigger sonarqube_etl_backfill --conf '{"start_date": "2025-01-01", "end_date": "2025-03-31"}'
+    ```
+    """
 )
 
 def get_sonarqube_config():
@@ -82,27 +110,128 @@ def fetch_projects(**context):
     context['task_instance'].xcom_push(key='projects', value=projects)
     return projects
 
-def fetch_project_metrics(project_key: str, metric_date: str, config: Dict) -> Dict:
-    """Fetch metrics for a specific project"""
+def fetch_project_metrics(project_key: str, metric_date: str, config: Dict, use_history: bool = False) -> Dict:
+    """Fetch metrics for a specific project, optionally from historical data"""
+    # Overall code metrics
     metrics_to_fetch = [
         'bugs', 'vulnerabilities', 'code_smells', 'security_hotspots',
         'coverage', 'duplicated_lines_density', 'reliability_rating',
         'security_rating', 'sqale_rating'
     ]
     
-    # Fetch general metrics
-    response = requests.get(
-        f"{config['base_url']}/api/measures/component",
-        params={
-            'component': project_key,
-            'metricKeys': ','.join(metrics_to_fetch)
-        },
-        auth=config['auth']
-    )
-    response.raise_for_status()
+    # New code metrics
+    new_code_metrics = [
+        'new_bugs', 'new_vulnerabilities', 'new_code_smells', 'new_security_hotspots',
+        'new_coverage', 'new_duplicated_lines_density', 'new_lines'
+    ]
     
-    measures = response.json().get('component', {}).get('measures', [])
-    metrics = {m['metric']: m.get('value', 0) for m in measures}
+    metrics = {}
+    
+    if use_history:
+        # Fetch historical metrics using search_history API
+        all_metrics = metrics_to_fetch + new_code_metrics
+        for metric in all_metrics:
+            try:
+                response = requests.get(
+                    f"{config['base_url']}/api/measures/search_history",
+                    params={
+                        'component': project_key,
+                        'metrics': metric,
+                        'from': metric_date,
+                        'to': metric_date,
+                        'ps': 1000
+                    },
+                    auth=config['auth']
+                )
+                response.raise_for_status()
+                
+                history_data = response.json()
+                if history_data.get('measures') and len(history_data['measures']) > 0:
+                    measure = history_data['measures'][0]
+                    if measure.get('history') and len(measure['history']) > 0:
+                        # Find the value for the specific date
+                        for hist_point in measure['history']:
+                            if hist_point.get('date', '').startswith(metric_date):
+                                metrics[metric] = hist_point.get('value', 0)
+                                break
+                        if metric not in metrics:
+                            # If no exact date match, use the closest value
+                            metrics[metric] = measure['history'][-1].get('value', 0)
+            except Exception as e:
+                logging.warning(f"Failed to fetch historical data for metric {metric}: {str(e)}")
+                metrics[metric] = 0
+    else:
+        # For non-historical mode, determine the best approach based on the date
+        all_metrics = metrics_to_fetch + new_code_metrics
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # For today or yesterday, use current values (they're most up-to-date)
+        if metric_date >= yesterday:
+            logging.info(f"Fetching current metrics for {project_key} on {metric_date}")
+            response = requests.get(
+                f"{config['base_url']}/api/measures/component",
+                params={
+                    'component': project_key,
+                    'metricKeys': ','.join(all_metrics)
+                },
+                auth=config['auth']
+            )
+            response.raise_for_status()
+            
+            measures = response.json().get('component', {}).get('measures', [])
+            metrics = {m['metric']: m.get('value', 0) for m in measures}
+            
+            # Log the fetched metrics for debugging
+            logging.info(f"Fetched metrics for {project_key}: {metrics}")
+            
+            # Get new code period information
+            component_data = response.json().get('component', {})
+            if 'period' in component_data:
+                period = component_data['period']
+                metrics['new_code_period_date'] = period.get('date', None)
+                metrics['new_code_period_mode'] = period.get('mode', 'days')
+                metrics['new_code_period_value'] = period.get('value', '30')
+        else:
+            # For older dates, try to get historical data
+            logging.info(f"Fetching historical metrics for {project_key} on {metric_date}")
+            for metric in all_metrics:
+                try:
+                    response = requests.get(
+                        f"{config['base_url']}/api/measures/search_history",
+                        params={
+                            'component': project_key,
+                            'metrics': metric,
+                            'from': metric_date,
+                            'to': metric_date,
+                            'ps': 1
+                        },
+                        auth=config['auth']
+                    )
+                    response.raise_for_status()
+                    
+                    history_data = response.json()
+                    if history_data.get('measures') and len(history_data['measures']) > 0:
+                        measure = history_data['measures'][0]
+                        if measure.get('history') and len(measure['history']) > 0:
+                            # Find the value for the specific date
+                            for hist_point in measure['history']:
+                                if hist_point.get('date', '').startswith(metric_date):
+                                    metrics[metric] = hist_point.get('value', 0)
+                                    break
+                except Exception as e:
+                    logging.warning(f"Failed to fetch historical data for metric {metric}: {str(e)}")
+            
+            # If no historical data found for past dates, return empty metrics (will trigger carry-forward)
+            if not metrics:
+                logging.info(f"No historical data found for {project_key} on {metric_date}, will use carry-forward")
+                return {
+                    'project_key': project_key,
+                    'metric_date': metric_date,
+                    'metrics': None,
+                    'issues_breakdown': {},
+                    'new_code_issues_breakdown': {}
+                }
     
     # Fetch issues breakdown
     issue_types = ['BUG', 'VULNERABILITY', 'CODE_SMELL']
@@ -175,34 +304,71 @@ def fetch_project_metrics(project_key: str, metric_date: str, config: Dict) -> D
         key = f"security_hotspot_{status}".lower()
         issues_breakdown[key] = response.json()['paging']['total']
     
+    # Fetch new code issues breakdown
+    new_code_issues_breakdown = {}
+    
+    # Check if we have a new code period
+    if not use_history or metrics.get('new_lines', 0) > 0:
+        for issue_type in issue_types:
+            for severity in severities:
+                try:
+                    response = requests.get(
+                        f"{config['base_url']}/api/issues/search",
+                        params={
+                            'componentKeys': project_key,
+                            'types': issue_type,
+                            'severities': severity,
+                            'resolved': 'false',
+                            'inNewCodePeriod': 'true',
+                            'ps': 1
+                        },
+                        auth=config['auth']
+                    )
+                    response.raise_for_status()
+                    key = f"new_code_{issue_type}_{severity}".lower()
+                    new_code_issues_breakdown[key] = response.json()['total']
+                except Exception as e:
+                    logging.warning(f"Failed to fetch new code issues for {issue_type}/{severity}: {str(e)}")
+                    new_code_issues_breakdown[f"new_code_{issue_type}_{severity}".lower()] = 0
+        
+        # Fetch new code security hotspots
+        for severity in hotspot_severities:
+            try:
+                response = requests.get(
+                    f"{config['base_url']}/api/hotspots/search",
+                    params={
+                        'projectKey': project_key,
+                        'securityCategory': severity,
+                        'inNewCodePeriod': 'true',
+                        'ps': 1
+                    },
+                    auth=config['auth']
+                )
+                response.raise_for_status()
+                key = f"new_code_security_hotspot_{severity}".lower()
+                new_code_issues_breakdown[key] = response.json()['paging']['total']
+            except Exception as e:
+                logging.warning(f"Failed to fetch new code hotspots for {severity}: {str(e)}")
+                new_code_issues_breakdown[f"new_code_security_hotspot_{severity}".lower()] = 0
+    
     return {
         'project_key': project_key,
         'metric_date': metric_date,
         'metrics': metrics,
-        'issues_breakdown': issues_breakdown
+        'issues_breakdown': issues_breakdown,
+        'new_code_issues_breakdown': new_code_issues_breakdown
     }
 
 def extract_metrics_for_project(**context):
-    """Extract metrics for all projects"""
+    """Extract metrics for all projects for the previous day"""
     projects = context['task_instance'].xcom_pull(task_ids='fetch_projects', key='projects')
     config = get_sonarqube_config()
     
-    # Determine date range for extraction
+    # Always extract yesterday's data for daily runs
     execution_date = context['execution_date']
-    is_backfill = context['dag_run'].conf.get('backfill', False)
+    metric_date = (execution_date - timedelta(days=1)).strftime('%Y-%m-%d')
     
-    if is_backfill:
-        # Extract last 3 months of data
-        end_date = execution_date
-        start_date = end_date - timedelta(days=90)
-        dates_to_extract = []
-        current_date = start_date
-        while current_date <= end_date:
-            dates_to_extract.append(current_date.strftime('%Y-%m-%d'))
-            current_date += timedelta(days=1)
-    else:
-        # Extract only yesterday's data
-        dates_to_extract = [(execution_date - timedelta(days=1)).strftime('%Y-%m-%d')]
+    logging.info(f"Extracting metrics for date: {metric_date}")
     
     all_metrics = []
     
@@ -210,22 +376,24 @@ def extract_metrics_for_project(**context):
         project_key = project['key']
         logging.info(f"Extracting metrics for project: {project_key}")
         
-        for metric_date in dates_to_extract:
-            try:
-                metrics_data = fetch_project_metrics(project_key, metric_date, config)
-                all_metrics.append(metrics_data)
-            except Exception as e:
-                logging.error(f"Failed to fetch metrics for {project_key} on {metric_date}: {str(e)}")
-                # For missing data, we'll handle carry-forward logic in the transform step
-                all_metrics.append({
-                    'project_key': project_key,
-                    'metric_date': metric_date,
-                    'metrics': None,
-                    'issues_breakdown': None,
-                    'error': str(e)
-                })
+        try:
+            # Use the standard fetch with historical API to ensure we get the right data
+            metrics_data = fetch_project_metrics(project_key, metric_date, config, use_history=False)
+            all_metrics.append(metrics_data)
+        except Exception as e:
+            logging.error(f"Failed to fetch metrics for {project_key} on {metric_date}: {str(e)}")
+            # For missing data, we'll handle carry-forward logic in the transform step
+            all_metrics.append({
+                'project_key': project_key,
+                'metric_date': metric_date,
+                'metrics': None,
+                'issues_breakdown': None,
+                'new_code_issues_breakdown': None,
+                'error': str(e)
+            })
     
     context['task_instance'].xcom_push(key='raw_metrics', value=all_metrics)
+    logging.info(f"Extracted {len(all_metrics)} metric records for {metric_date}")
     return len(all_metrics)
 
 def transform_and_load_metrics(**context):
@@ -314,6 +482,15 @@ def transform_metric_data(metric_data: Dict) -> Dict:
     """Transform raw metric data into database format"""
     metrics = metric_data['metrics']
     issues = metric_data['issues_breakdown']
+    new_code_issues = metric_data.get('new_code_issues_breakdown', {})
+    
+    # Parse new code period date if available
+    new_code_period_date = None
+    if 'new_code_period_date' in metrics and metrics['new_code_period_date']:
+        try:
+            new_code_period_date = parser.parse(metrics['new_code_period_date']).date()
+        except:
+            new_code_period_date = None
     
     return {
         'metric_date': metric_data['metric_date'],
@@ -355,7 +532,35 @@ def transform_metric_data(metric_data: Dict) -> Dict:
         'coverage_percentage': float(metrics.get('coverage', 0)),
         'duplicated_lines_density': float(metrics.get('duplicated_lines_density', 0)),
         'data_source_timestamp': datetime.now(),
-        'is_carried_forward': False
+        'is_carried_forward': False,
+        # New code metrics
+        'new_code_bugs_total': int(metrics.get('new_bugs', 0)),
+        'new_code_bugs_blocker': new_code_issues.get('new_code_bug_blocker', 0),
+        'new_code_bugs_critical': new_code_issues.get('new_code_bug_critical', 0),
+        'new_code_bugs_major': new_code_issues.get('new_code_bug_major', 0),
+        'new_code_bugs_minor': new_code_issues.get('new_code_bug_minor', 0),
+        'new_code_bugs_info': new_code_issues.get('new_code_bug_info', 0),
+        'new_code_vulnerabilities_total': int(metrics.get('new_vulnerabilities', 0)),
+        'new_code_vulnerabilities_critical': new_code_issues.get('new_code_vulnerability_critical', 0),
+        'new_code_vulnerabilities_high': new_code_issues.get('new_code_vulnerability_major', 0),
+        'new_code_vulnerabilities_medium': new_code_issues.get('new_code_vulnerability_minor', 0),
+        'new_code_vulnerabilities_low': new_code_issues.get('new_code_vulnerability_info', 0),
+        'new_code_code_smells_total': int(metrics.get('new_code_smells', 0)),
+        'new_code_code_smells_blocker': new_code_issues.get('new_code_code_smell_blocker', 0),
+        'new_code_code_smells_critical': new_code_issues.get('new_code_code_smell_critical', 0),
+        'new_code_code_smells_major': new_code_issues.get('new_code_code_smell_major', 0),
+        'new_code_code_smells_minor': new_code_issues.get('new_code_code_smell_minor', 0),
+        'new_code_code_smells_info': new_code_issues.get('new_code_code_smell_info', 0),
+        'new_code_security_hotspots_total': int(metrics.get('new_security_hotspots', 0)),
+        'new_code_security_hotspots_high': new_code_issues.get('new_code_security_hotspot_high', 0),
+        'new_code_security_hotspots_medium': new_code_issues.get('new_code_security_hotspot_medium', 0),
+        'new_code_security_hotspots_low': new_code_issues.get('new_code_security_hotspot_low', 0),
+        'new_code_security_hotspots_to_review': new_code_issues.get('new_code_security_hotspot_to_review', 0),
+        'new_code_security_hotspots_reviewed': new_code_issues.get('new_code_security_hotspot_reviewed', 0),
+        'new_code_coverage_percentage': float(metrics.get('new_coverage', 0)),
+        'new_code_duplicated_lines_density': float(metrics.get('new_duplicated_lines_density', 0)),
+        'new_code_lines': int(metrics.get('new_lines', 0)),
+        'new_code_period_date': new_code_period_date
     }
 
 def insert_metric(cursor, project_id: int, metric_data: Dict):
@@ -375,11 +580,24 @@ def insert_metric(cursor, project_id: int, metric_data: Dict):
             security_hotspots_low, security_hotspots_to_review, security_hotspots_reviewed,
             security_hotspots_acknowledged, security_hotspots_fixed,
             coverage_percentage, duplicated_lines_density,
-            data_source_timestamp, is_carried_forward
+            data_source_timestamp, is_carried_forward,
+            new_code_bugs_total, new_code_bugs_blocker, new_code_bugs_critical,
+            new_code_bugs_major, new_code_bugs_minor, new_code_bugs_info,
+            new_code_vulnerabilities_total, new_code_vulnerabilities_critical,
+            new_code_vulnerabilities_high, new_code_vulnerabilities_medium,
+            new_code_vulnerabilities_low, new_code_code_smells_total,
+            new_code_code_smells_blocker, new_code_code_smells_critical,
+            new_code_code_smells_major, new_code_code_smells_minor,
+            new_code_code_smells_info, new_code_security_hotspots_total,
+            new_code_security_hotspots_high, new_code_security_hotspots_medium,
+            new_code_security_hotspots_low, new_code_security_hotspots_to_review,
+            new_code_security_hotspots_reviewed, new_code_coverage_percentage,
+            new_code_duplicated_lines_density, new_code_lines, new_code_period_date
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) ON CONFLICT (project_id, metric_date) DO UPDATE SET
             bugs_total = EXCLUDED.bugs_total,
             bugs_blocker = EXCLUDED.bugs_blocker,
@@ -419,7 +637,34 @@ def insert_metric(cursor, project_id: int, metric_data: Dict):
             coverage_percentage = EXCLUDED.coverage_percentage,
             duplicated_lines_density = EXCLUDED.duplicated_lines_density,
             data_source_timestamp = EXCLUDED.data_source_timestamp,
-            is_carried_forward = EXCLUDED.is_carried_forward
+            is_carried_forward = EXCLUDED.is_carried_forward,
+            new_code_bugs_total = EXCLUDED.new_code_bugs_total,
+            new_code_bugs_blocker = EXCLUDED.new_code_bugs_blocker,
+            new_code_bugs_critical = EXCLUDED.new_code_bugs_critical,
+            new_code_bugs_major = EXCLUDED.new_code_bugs_major,
+            new_code_bugs_minor = EXCLUDED.new_code_bugs_minor,
+            new_code_bugs_info = EXCLUDED.new_code_bugs_info,
+            new_code_vulnerabilities_total = EXCLUDED.new_code_vulnerabilities_total,
+            new_code_vulnerabilities_critical = EXCLUDED.new_code_vulnerabilities_critical,
+            new_code_vulnerabilities_high = EXCLUDED.new_code_vulnerabilities_high,
+            new_code_vulnerabilities_medium = EXCLUDED.new_code_vulnerabilities_medium,
+            new_code_vulnerabilities_low = EXCLUDED.new_code_vulnerabilities_low,
+            new_code_code_smells_total = EXCLUDED.new_code_code_smells_total,
+            new_code_code_smells_blocker = EXCLUDED.new_code_code_smells_blocker,
+            new_code_code_smells_critical = EXCLUDED.new_code_code_smells_critical,
+            new_code_code_smells_major = EXCLUDED.new_code_code_smells_major,
+            new_code_code_smells_minor = EXCLUDED.new_code_code_smells_minor,
+            new_code_code_smells_info = EXCLUDED.new_code_code_smells_info,
+            new_code_security_hotspots_total = EXCLUDED.new_code_security_hotspots_total,
+            new_code_security_hotspots_high = EXCLUDED.new_code_security_hotspots_high,
+            new_code_security_hotspots_medium = EXCLUDED.new_code_security_hotspots_medium,
+            new_code_security_hotspots_low = EXCLUDED.new_code_security_hotspots_low,
+            new_code_security_hotspots_to_review = EXCLUDED.new_code_security_hotspots_to_review,
+            new_code_security_hotspots_reviewed = EXCLUDED.new_code_security_hotspots_reviewed,
+            new_code_coverage_percentage = EXCLUDED.new_code_coverage_percentage,
+            new_code_duplicated_lines_density = EXCLUDED.new_code_duplicated_lines_density,
+            new_code_lines = EXCLUDED.new_code_lines,
+            new_code_period_date = EXCLUDED.new_code_period_date
     """
     
     values = (
@@ -441,7 +686,22 @@ def insert_metric(cursor, project_id: int, metric_data: Dict):
         metric_data['security_hotspots_to_review'], metric_data['security_hotspots_reviewed'],
         metric_data['security_hotspots_acknowledged'], metric_data['security_hotspots_fixed'],
         metric_data['coverage_percentage'], metric_data['duplicated_lines_density'],
-        metric_data['data_source_timestamp'], metric_data['is_carried_forward']
+        metric_data['data_source_timestamp'], metric_data['is_carried_forward'],
+        # New code metrics values
+        metric_data['new_code_bugs_total'], metric_data['new_code_bugs_blocker'],
+        metric_data['new_code_bugs_critical'], metric_data['new_code_bugs_major'],
+        metric_data['new_code_bugs_minor'], metric_data['new_code_bugs_info'],
+        metric_data['new_code_vulnerabilities_total'], metric_data['new_code_vulnerabilities_critical'],
+        metric_data['new_code_vulnerabilities_high'], metric_data['new_code_vulnerabilities_medium'],
+        metric_data['new_code_vulnerabilities_low'], metric_data['new_code_code_smells_total'],
+        metric_data['new_code_code_smells_blocker'], metric_data['new_code_code_smells_critical'],
+        metric_data['new_code_code_smells_major'], metric_data['new_code_code_smells_minor'],
+        metric_data['new_code_code_smells_info'], metric_data['new_code_security_hotspots_total'],
+        metric_data['new_code_security_hotspots_high'], metric_data['new_code_security_hotspots_medium'],
+        metric_data['new_code_security_hotspots_low'], metric_data['new_code_security_hotspots_to_review'],
+        metric_data['new_code_security_hotspots_reviewed'], metric_data['new_code_coverage_percentage'],
+        metric_data['new_code_duplicated_lines_density'], metric_data['new_code_lines'],
+        metric_data['new_code_period_date']
     )
     
     cursor.execute(insert_query, values)
