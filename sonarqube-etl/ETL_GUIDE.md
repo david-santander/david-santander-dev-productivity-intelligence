@@ -19,6 +19,7 @@ The SonarQube ETL system uses a primary DAG (`sonarqube_etl`) for daily incremen
 - **Schedule**: Daily at 2 AM (0 2 * * *)
 - **Catchup**: Disabled (use backfill DAG for historical data)
 - **Max Active Runs**: 1 (prevents concurrent executions)
+- **API Client**: `SonarQubeClient` (handles all SonarQube API interactions)
 
 ## How It Works
 
@@ -239,6 +240,28 @@ For environments with many projects:
 - Coordinate with CI/CD pipeline schedules
 - Ensure SonarQube analyses run before ETL
 
+## Technical Implementation Details
+
+### SonarQube Client
+
+The ETL uses a shared `SonarQubeClient` class that provides:
+
+- **Smart API Selection**: Automatically chooses between current and historical APIs
+- **Error Handling**: Graceful handling of API failures
+- **Type Safety**: Full type hints for all methods
+- **Logging**: Detailed logging of all API interactions
+
+```python
+# Example of how the ETL uses the client
+from sonarqube_client import SonarQubeClient
+
+config = get_sonarqube_config()
+client = SonarQubeClient(config)
+
+# The client automatically uses the right API
+metrics = client.fetch_metrics_smart(project_key, metric_date)
+```
+
 ## Integration with Backfill
 
 For historical data or gap filling, use the dedicated backfill DAG:
@@ -296,10 +319,14 @@ docker exec -it sonarqube-etl-airflow-scheduler-1 airflow jobs check
 
 # Check database connectivity
 docker exec -it sonarqube-etl-airflow-webserver-1 airflow db check
+
+# Test SonarQube client import
+docker exec -it sonarqube-etl-airflow-webserver-1 python -c "from sonarqube_client import SonarQubeClient; print('Client OK')"
 ```
 
 ### Getting Help
 1. Check Airflow UI for error messages
 2. Review task logs for detailed errors
-3. Consult SonarQube API documentation
-4. Check database query logs
+3. Check SonarQubeClient logs for API issues
+4. Consult SonarQube API documentation
+5. Check database query logs

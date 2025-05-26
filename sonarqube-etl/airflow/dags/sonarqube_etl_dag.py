@@ -1,14 +1,43 @@
+"""SonarQube ETL DAG for daily metrics extraction.
+
+This module implements an Airflow DAG that extracts code quality metrics from SonarQube
+and loads them into PostgreSQL for dashboard visualization and trend analysis.
+
+The DAG runs daily at 2 AM and collects metrics for the previous day, including:
+- Code issues (bugs, vulnerabilities, code smells, security hotspots)
+- Code coverage and duplication metrics
+- Quality ratings
+- New code period metrics
+
+Example:
+    To manually trigger the DAG::
+    
+        airflow dags trigger sonarqube_etl
+
+Note:
+    For historical data backfill, use the dedicated sonarqube_etl_backfill DAG.
+
+Attributes:
+    SONARQUBE_METRICS (List[str]): Core metrics to extract from SonarQube
+    NEW_CODE_METRICS (List[str]): Metrics specific to new code period
+    ISSUE_TYPES (List[str]): Types of issues to track
+    SEVERITIES (List[str]): Issue severity levels
+    STATUSES (List[str]): Issue status values
+"""
+
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.models import Variable
-import requests
 import logging
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Tuple
 import json
 from dateutil import parser
+
+# Import the shared SonarQube client
+from sonarqube_client import SonarQubeClient
 
 # Default args for the DAG
 default_args = {
@@ -60,8 +89,28 @@ dag = DAG(
     """
 )
 
-def get_sonarqube_config():
-    """Get SonarQube configuration from Airflow Variables or Environment"""
+def get_sonarqube_config() -> Dict[str, Any]:
+    """Get SonarQube configuration from Airflow Variables or Environment.
+    
+    Retrieves the SonarQube API token and base URL from environment variables.
+    The token is required for authentication with the SonarQube API.
+    
+    Returns:
+        Dict[str, Any]: Configuration dictionary containing:
+            - base_url (str): SonarQube server URL
+            - token (str): API authentication token
+            - auth (Tuple[str, str]): Authentication tuple for requests
+            
+    Raises:
+        KeyError: If SONARQUBE_TOKEN environment variable is not set
+        
+    Example:
+        >>> config = get_sonarqube_config()
+        >>> response = requests.get(
+        ...     f"{config['base_url']}/api/projects/search",
+        ...     auth=config['auth']
+        ... )
+    """
     # Force using environment variable for now
     token = os.environ.get('AIRFLOW_VAR_SONARQUBE_TOKEN')
     if not token:
@@ -78,291 +127,120 @@ def get_sonarqube_config():
         'auth': (token, ''),
     }
 
-def fetch_projects(**context):
-    """Fetch all projects from SonarQube"""
+def fetch_projects(**context) -> List[Dict[str, Any]]:
+    """Fetch all projects from SonarQube.
+    
+    Retrieves the complete list of projects from SonarQube using pagination.
+    This task is the entry point for the ETL process and provides the project
+    list to subsequent tasks.
+    
+    Args:
+        **context: Airflow context dictionary containing task instance and
+                  execution date information
+                  
+    Returns:
+        List[Dict[str, Any]]: List of project dictionaries containing:
+            - key (str): Unique project identifier
+            - name (str): Project display name
+            - qualifier (str): Project type qualifier
+            - visibility (str): Project visibility setting
+            
+    Raises:
+        requests.HTTPError: If SonarQube API returns an error
+        KeyError: If authentication token is not configured
+        
+    Note:
+        Results are pushed to XCom with key 'projects' for downstream tasks.
+        
+    Example:
+        The function is typically called by Airflow's PythonOperator::
+        
+            fetch_task = PythonOperator(
+                task_id='fetch_projects',
+                python_callable=fetch_projects
+            )
+    """
     config = get_sonarqube_config()
+    client = SonarQubeClient(config)
     
-    # Debug logging
-    token = config.get('token', 'NO_TOKEN_FOUND')
-    logging.info(f"Using SonarQube token: {token[:10]}...{token[-4:] if len(token) > 14 else token}")
-    logging.info(f"Using SonarQube URL: {config['base_url']}")
+    projects = client.fetch_all_projects()
     
-    projects = []
-    page = 1
-    page_size = 100
-    
-    while True:
-        response = requests.get(
-            f"{config['base_url']}/api/projects/search",
-            params={'p': page, 'ps': page_size},
-            auth=config['auth']
-        )
-        response.raise_for_status()
-        
-        data = response.json()
-        projects.extend(data['components'])
-        
-        if len(projects) >= data['paging']['total']:
-            break
-        page += 1
-    
-    logging.info(f"Found {len(projects)} projects in SonarQube")
     context['task_instance'].xcom_push(key='projects', value=projects)
     return projects
 
-def fetch_project_metrics(project_key: str, metric_date: str, config: Dict, use_history: bool = False) -> Dict:
-    """Fetch metrics for a specific project, optionally from historical data"""
-    # Overall code metrics
-    metrics_to_fetch = [
-        'bugs', 'vulnerabilities', 'code_smells', 'security_hotspots',
-        'coverage', 'duplicated_lines_density', 'reliability_rating',
-        'security_rating', 'sqale_rating'
-    ]
+def fetch_project_metrics(project_key: str, metric_date: str, config: Dict[str, Any], 
+                         use_history: bool = False) -> Dict[str, Any]:
+    """Fetch metrics for a specific project, optionally from historical data.
     
-    # New code metrics
-    new_code_metrics = [
-        'new_bugs', 'new_vulnerabilities', 'new_code_smells', 'new_security_hotspots',
-        'new_coverage', 'new_duplicated_lines_density', 'new_lines'
-    ]
+    This function now delegates to the SonarQubeClient for all API interactions.
+    It's maintained for backward compatibility with the existing DAG structure.
     
-    metrics = {}
-    
-    if use_history:
-        # Fetch historical metrics using search_history API
-        all_metrics = metrics_to_fetch + new_code_metrics
-        for metric in all_metrics:
-            try:
-                response = requests.get(
-                    f"{config['base_url']}/api/measures/search_history",
-                    params={
-                        'component': project_key,
-                        'metrics': metric,
-                        'from': metric_date,
-                        'to': metric_date,
-                        'ps': 1000
-                    },
-                    auth=config['auth']
-                )
-                response.raise_for_status()
-                
-                history_data = response.json()
-                if history_data.get('measures') and len(history_data['measures']) > 0:
-                    measure = history_data['measures'][0]
-                    if measure.get('history') and len(measure['history']) > 0:
-                        # Find the value for the specific date
-                        for hist_point in measure['history']:
-                            if hist_point.get('date', '').startswith(metric_date):
-                                metrics[metric] = hist_point.get('value', 0)
-                                break
-                        if metric not in metrics:
-                            # If no exact date match, use the closest value
-                            metrics[metric] = measure['history'][-1].get('value', 0)
-            except Exception as e:
-                logging.warning(f"Failed to fetch historical data for metric {metric}: {str(e)}")
-                metrics[metric] = 0
-    else:
-        # For non-historical mode, determine the best approach based on the date
-        all_metrics = metrics_to_fetch + new_code_metrics
-        current_date = datetime.now().strftime('%Y-%m-%d')
-        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    Args:
+        project_key (str): SonarQube project key identifier
+        metric_date (str): Date to fetch metrics for (YYYY-MM-DD format)
+        config (Dict[str, Any]): SonarQube configuration dictionary from get_sonarqube_config()
+        use_history (bool, optional): If True, uses historical API for past data.
+                                     If False, uses smart selection based on date.
+                                     Defaults to False.
+                                     
+    Returns:
+        Dict[str, Any]: Dictionary containing:
+            - project_key (str): The project identifier
+            - metric_date (str): The date of the metrics
+            - metrics (Dict[str, Any] or None): Core metrics dictionary or None if unavailable
+            - issues_breakdown (Dict[str, int]): Issue counts by type/severity/status
+            - new_code_issues_breakdown (Dict[str, int]): New code issue counts
+            - error (str, optional): Error message if metrics fetch failed
+            
+    Note:
+        This function is maintained for backward compatibility. The actual
+        implementation is now in SonarQubeClient.
         
-        # For today or yesterday, use current values (they're most up-to-date)
-        if metric_date >= yesterday:
-            logging.info(f"Fetching current metrics for {project_key} on {metric_date}")
-            response = requests.get(
-                f"{config['base_url']}/api/measures/component",
-                params={
-                    'component': project_key,
-                    'metricKeys': ','.join(all_metrics)
-                },
-                auth=config['auth']
-            )
-            response.raise_for_status()
-            
-            measures = response.json().get('component', {}).get('measures', [])
-            metrics = {m['metric']: m.get('value', 0) for m in measures}
-            
-            # Log the fetched metrics for debugging
-            logging.info(f"Fetched metrics for {project_key}: {metrics}")
-            
-            # Get new code period information
-            component_data = response.json().get('component', {})
-            if 'period' in component_data:
-                period = component_data['period']
-                metrics['new_code_period_date'] = period.get('date', None)
-                metrics['new_code_period_mode'] = period.get('mode', 'days')
-                metrics['new_code_period_value'] = period.get('value', '30')
-        else:
-            # For older dates, try to get historical data
-            logging.info(f"Fetching historical metrics for {project_key} on {metric_date}")
-            for metric in all_metrics:
-                try:
-                    response = requests.get(
-                        f"{config['base_url']}/api/measures/search_history",
-                        params={
-                            'component': project_key,
-                            'metrics': metric,
-                            'from': metric_date,
-                            'to': metric_date,
-                            'ps': 1
-                        },
-                        auth=config['auth']
-                    )
-                    response.raise_for_status()
-                    
-                    history_data = response.json()
-                    if history_data.get('measures') and len(history_data['measures']) > 0:
-                        measure = history_data['measures'][0]
-                        if measure.get('history') and len(measure['history']) > 0:
-                            # Find the value for the specific date
-                            for hist_point in measure['history']:
-                                if hist_point.get('date', '').startswith(metric_date):
-                                    metrics[metric] = hist_point.get('value', 0)
-                                    break
-                except Exception as e:
-                    logging.warning(f"Failed to fetch historical data for metric {metric}: {str(e)}")
-            
-            # If no historical data found for past dates, return empty metrics (will trigger carry-forward)
-            if not metrics:
-                logging.info(f"No historical data found for {project_key} on {metric_date}, will use carry-forward")
-                return {
-                    'project_key': project_key,
-                    'metric_date': metric_date,
-                    'metrics': None,
-                    'issues_breakdown': {},
-                    'new_code_issues_breakdown': {}
-                }
-    
-    # Fetch issues breakdown
-    issue_types = ['BUG', 'VULNERABILITY', 'CODE_SMELL']
-    severities = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO']
-    statuses = ['OPEN', 'CONFIRMED', 'REOPENED', 'RESOLVED', 'CLOSED']
-    
-    issues_breakdown = {}
-    
-    for issue_type in issue_types:
-        for severity in severities:
-            response = requests.get(
-                f"{config['base_url']}/api/issues/search",
-                params={
-                    'componentKeys': project_key,
-                    'types': issue_type,
-                    'severities': severity,
-                    'resolved': 'false',
-                    'ps': 1
-                },
-                auth=config['auth']
-            )
-            response.raise_for_status()
-            key = f"{issue_type}_{severity}".lower()
-            issues_breakdown[key] = response.json()['total']
-        
-        for status in statuses:
-            response = requests.get(
-                f"{config['base_url']}/api/issues/search",
-                params={
-                    'componentKeys': project_key,
-                    'types': issue_type,
-                    'statuses': status,
-                    'ps': 1
-                },
-                auth=config['auth']
-            )
-            response.raise_for_status()
-            key = f"{issue_type}_{status}".lower()
-            issues_breakdown[key] = response.json()['total']
-    
-    # Fetch security hotspots breakdown
-    hotspot_statuses = ['TO_REVIEW', 'REVIEWED']  # Valid statuses for SonarQube hotspots API
-    hotspot_severities = ['HIGH', 'MEDIUM', 'LOW']
-    
-    for severity in hotspot_severities:
-        response = requests.get(
-            f"{config['base_url']}/api/hotspots/search",
-            params={
-                'projectKey': project_key,
-                'securityCategory': severity,
-                'ps': 1
-            },
-            auth=config['auth']
-        )
-        response.raise_for_status()
-        key = f"security_hotspot_{severity}".lower()
-        issues_breakdown[key] = response.json()['paging']['total']
-    
-    for status in hotspot_statuses:
-        response = requests.get(
-            f"{config['base_url']}/api/hotspots/search",
-            params={
-                'projectKey': project_key,
-                'status': status,
-                'ps': 1
-            },
-            auth=config['auth']
-        )
-        response.raise_for_status()
-        key = f"security_hotspot_{status}".lower()
-        issues_breakdown[key] = response.json()['paging']['total']
-    
-    # Fetch new code issues breakdown
-    new_code_issues_breakdown = {}
-    
-    # Check if we have a new code period
-    if not use_history or metrics.get('new_lines', 0) > 0:
-        for issue_type in issue_types:
-            for severity in severities:
-                try:
-                    response = requests.get(
-                        f"{config['base_url']}/api/issues/search",
-                        params={
-                            'componentKeys': project_key,
-                            'types': issue_type,
-                            'severities': severity,
-                            'resolved': 'false',
-                            'inNewCodePeriod': 'true',
-                            'ps': 1
-                        },
-                        auth=config['auth']
-                    )
-                    response.raise_for_status()
-                    key = f"new_code_{issue_type}_{severity}".lower()
-                    new_code_issues_breakdown[key] = response.json()['total']
-                except Exception as e:
-                    logging.warning(f"Failed to fetch new code issues for {issue_type}/{severity}: {str(e)}")
-                    new_code_issues_breakdown[f"new_code_{issue_type}_{severity}".lower()] = 0
-        
-        # Fetch new code security hotspots
-        for severity in hotspot_severities:
-            try:
-                response = requests.get(
-                    f"{config['base_url']}/api/hotspots/search",
-                    params={
-                        'projectKey': project_key,
-                        'securityCategory': severity,
-                        'inNewCodePeriod': 'true',
-                        'ps': 1
-                    },
-                    auth=config['auth']
-                )
-                response.raise_for_status()
-                key = f"new_code_security_hotspot_{severity}".lower()
-                new_code_issues_breakdown[key] = response.json()['paging']['total']
-            except Exception as e:
-                logging.warning(f"Failed to fetch new code hotspots for {severity}: {str(e)}")
-                new_code_issues_breakdown[f"new_code_security_hotspot_{severity}".lower()] = 0
-    
-    return {
-        'project_key': project_key,
-        'metric_date': metric_date,
-        'metrics': metrics,
-        'issues_breakdown': issues_breakdown,
-        'new_code_issues_breakdown': new_code_issues_breakdown
-    }
+    Example:
+        >>> config = get_sonarqube_config()
+        >>> metrics = fetch_project_metrics(
+        ...     'my-project', 
+        ...     '2025-01-15', 
+        ...     config,
+        ...     use_history=True
+        ... )
+    """
+    client = SonarQubeClient(config)
+    return client.fetch_project_metrics(project_key, metric_date, use_history)
 
-def extract_metrics_for_project(**context):
-    """Extract metrics for all projects for the previous day"""
+def extract_metrics_for_project(**context) -> int:
+    """Extract metrics for all projects for the previous day.
+    
+    Main extraction task that iterates through all projects and fetches their
+    metrics for yesterday's date. This ensures we capture metrics after daily
+    analysis runs have completed.
+    
+    Args:
+        **context: Airflow context dictionary containing:
+            - task_instance: For XCom communication
+            - execution_date: Current execution date
+            
+    Returns:
+        int: Number of metric records extracted
+        
+    Note:
+        - Always extracts yesterday's data relative to execution_date
+        - Handles failures gracefully by recording error states
+        - Results are pushed to XCom with key 'raw_metrics'
+        - Now uses SonarQubeClient for all API operations
+        
+    Example:
+        This function is designed to be called by Airflow's PythonOperator
+        and relies on the output of fetch_projects task::
+        
+            extract_task = PythonOperator(
+                task_id='extract_metrics',
+                python_callable=extract_metrics_for_project
+            )
+    """
     projects = context['task_instance'].xcom_pull(task_ids='fetch_projects', key='projects')
     config = get_sonarqube_config()
+    client = SonarQubeClient(config)
     
     # Always extract yesterday's data for daily runs
     execution_date = context['execution_date']
@@ -377,8 +255,8 @@ def extract_metrics_for_project(**context):
         logging.info(f"Extracting metrics for project: {project_key}")
         
         try:
-            # Use the standard fetch with historical API to ensure we get the right data
-            metrics_data = fetch_project_metrics(project_key, metric_date, config, use_history=False)
+            # Use the smart fetch method which automatically selects the right API
+            metrics_data = client.fetch_metrics_smart(project_key, metric_date)
             all_metrics.append(metrics_data)
         except Exception as e:
             logging.error(f"Failed to fetch metrics for {project_key} on {metric_date}: {str(e)}")
@@ -396,8 +274,32 @@ def extract_metrics_for_project(**context):
     logging.info(f"Extracted {len(all_metrics)} metric records for {metric_date}")
     return len(all_metrics)
 
-def transform_and_load_metrics(**context):
-    """Transform and load metrics into PostgreSQL"""
+def transform_and_load_metrics(**context) -> None:
+    """Transform and load metrics into PostgreSQL.
+    
+    Final task in the ETL pipeline that transforms raw metrics into the database
+    schema format and loads them into PostgreSQL. Implements carry-forward logic
+    for missing data points.
+    
+    Args:
+        **context: Airflow context dictionary containing:
+            - task_instance: For retrieving XCom data from previous tasks
+            
+    Raises:
+        Exception: If database operations fail (transaction is rolled back)
+        
+    Note:
+        - Uses database transactions for data integrity
+        - Implements upsert logic to handle re-runs
+        - Carries forward last known values when current data unavailable
+        
+    Process:
+        1. Retrieves raw metrics and projects from XCom
+        2. Ensures all projects exist in database
+        3. Transforms metrics to database format
+        4. Handles carry-forward for missing data
+        5. Commits all changes atomically
+    """
     raw_metrics = context['task_instance'].xcom_pull(task_ids='extract_metrics', key='raw_metrics')
     projects = context['task_instance'].xcom_pull(task_ids='fetch_projects', key='projects')
     
@@ -478,8 +380,41 @@ def transform_and_load_metrics(**context):
         cursor.close()
         conn.close()
 
-def transform_metric_data(metric_data: Dict) -> Dict:
-    """Transform raw metric data into database format"""
+def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Transform raw metric data into database format.
+    
+    Converts the raw metric data from SonarQube API format into the flat
+    structure required by the database schema. Handles missing values and
+    type conversions.
+    
+    Args:
+        metric_data (Dict[str, Any]): Raw metric data containing:
+            - metrics: Core metric values
+            - issues_breakdown: Issue counts by type/severity/status
+            - new_code_issues_breakdown: New code issue counts
+            - metric_date: Date of the metrics
+            
+    Returns:
+        Dict[str, Any]: Transformed data matching database schema with all
+                       required fields populated (using defaults for missing values)
+                       
+    Note:
+        - Converts string values to appropriate numeric types
+        - Handles missing values with sensible defaults (0 for counts)
+        - Parses new code period date if available
+        - Sets is_carried_forward to False for actual data
+        
+    Example:
+        >>> raw_data = {
+        ...     'metric_date': '2025-01-15',
+        ...     'metrics': {'bugs': '5', 'coverage': '85.3'},
+        ...     'issues_breakdown': {'bug_blocker': 1},
+        ...     'new_code_issues_breakdown': {}
+        ... }
+        >>> transformed = transform_metric_data(raw_data)
+        >>> print(transformed['bugs_total'])  # Returns integer
+        5
+    """
     metrics = metric_data['metrics']
     issues = metric_data['issues_breakdown']
     new_code_issues = metric_data.get('new_code_issues_breakdown', {})
@@ -563,8 +498,30 @@ def transform_metric_data(metric_data: Dict) -> Dict:
         'new_code_period_date': new_code_period_date
     }
 
-def insert_metric(cursor, project_id: int, metric_data: Dict):
-    """Insert metric data into database"""
+def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
+    """Insert metric data into database.
+    
+    Executes an upsert operation to insert new metric data or update existing
+    records. Uses PostgreSQL's ON CONFLICT clause for idempotent operations.
+    
+    Args:
+        cursor: PostgreSQL database cursor
+        project_id (int): Database ID of the project
+        metric_data (Dict[str, Any]): Transformed metric data from transform_metric_data()
+                                     containing all required database fields
+                                     
+    Note:
+        - Uses parameterized queries to prevent SQL injection
+        - Implements full upsert (INSERT ... ON CONFLICT DO UPDATE)
+        - Updates all fields on conflict to ensure data consistency
+        
+    Example:
+        >>> conn = pg_hook.get_conn()
+        >>> cursor = conn.cursor()
+        >>> transformed_data = transform_metric_data(raw_metrics)
+        >>> insert_metric(cursor, project_id=1, metric_data=transformed_data)
+        >>> conn.commit()
+    """
     insert_query = """
         INSERT INTO sonarqube_metrics.daily_project_metrics (
             project_id, metric_date,
@@ -706,8 +663,35 @@ def insert_metric(cursor, project_id: int, metric_data: Dict):
     
     cursor.execute(insert_query, values)
 
-def insert_carried_forward_metric(cursor, project_id: int, metric_date: str, last_known: Dict):
-    """Insert carried forward metric when current data is not available"""
+def insert_carried_forward_metric(cursor, project_id: int, metric_date: str, 
+                                 last_known: Dict[str, Any]) -> None:
+    """Insert carried forward metric when current data is not available.
+    
+    Creates a new metric record by copying the last known values with updated
+    metadata to indicate the data was carried forward.
+    
+    Args:
+        cursor: PostgreSQL database cursor
+        project_id (int): Database ID of the project
+        metric_date (str): Date for the carried forward record (YYYY-MM-DD)
+        last_known (Dict[str, Any]): Dictionary containing the last known metric
+                                    values to be carried forward
+                                    
+    Note:
+        - Sets is_carried_forward flag to True
+        - Updates data_source_timestamp to current time
+        - Preserves all metric values from last known state
+        
+    Example:
+        >>> # When today's data is unavailable
+        >>> if not current_metrics:
+        ...     insert_carried_forward_metric(
+        ...         cursor, 
+        ...         project_id=1,
+        ...         metric_date='2025-01-16',
+        ...         last_known=yesterday_metrics
+        ...     )
+    """
     # Copy last known values but update date and carry-forward flag
     metric_data = last_known.copy()
     metric_data['metric_date'] = metric_date
