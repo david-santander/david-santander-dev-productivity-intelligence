@@ -1,0 +1,697 @@
+{
+  "comparison_timestamp": "2025-05-27T05:03:06.108792+00:00",
+  "postgres_snapshot_time": "2025-05-27T05:03:03.477797+00:00",
+  "sonarqube_fetch_time": "2025-05-27T05:03:03.476554+00:00",
+  "projects": {
+    "dev.productivity:django-sample-app": {
+      "project_key": "dev.productivity:django-sample-app",
+      "in_postgres": true,
+      "in_sonarqube": true,
+      "discrepancies": [],
+      "metrics": {
+        "bugs_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_blocker": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_critical": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_major": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_minor": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_info": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_open": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_confirmed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_reopened": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_resolved": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_closed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_total": {
+          "postgres_value": 1,
+          "sonarqube_value": 1,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "vulnerabilities_critical": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_high": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_medium": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_low": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_open": {
+          "postgres_value": 1,
+          "sonarqube_value": 1,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "vulnerabilities_confirmed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_reopened": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_resolved": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_closed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "code_smells_total": {
+          "postgres_value": 15,
+          "sonarqube_value": 15,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "code_smells_blocker": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "code_smells_critical": {
+          "postgres_value": 2,
+          "sonarqube_value": 2,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "code_smells_major": {
+          "postgres_value": 2,
+          "sonarqube_value": 2,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "code_smells_minor": {
+          "postgres_value": 11,
+          "sonarqube_value": 11,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "code_smells_info": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "security_hotspots_total": {
+          "postgres_value": 15,
+          "sonarqube_value": 15,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_high": {
+          "postgres_value": 15,
+          "sonarqube_value": 15,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_medium": {
+          "postgres_value": 15,
+          "sonarqube_value": 15,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_low": {
+          "postgres_value": 15,
+          "sonarqube_value": 15,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_to_review": {
+          "postgres_value": 15,
+          "sonarqube_value": 15,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_reviewed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "security_hotspots_acknowledged": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "security_hotspots_fixed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "coverage_percentage": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "duplicated_lines_density": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "new_code_bugs_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_vulnerabilities_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_code_smells_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_security_hotspots_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_coverage_percentage": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "new_code_duplicated_lines_density": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "new_code_lines": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        }
+      },
+      "postgres_metric_date": "2025-05-27",
+      "postgres_is_carried_forward": true,
+      "data_source_timestamp": "2025-05-27T03:07:21.004453+00:00",
+      "has_discrepancies": false,
+      "discrepancy_count": 0
+    },
+    "dev.productivity:fastapi-sample-app": {
+      "project_key": "dev.productivity:fastapi-sample-app",
+      "in_postgres": true,
+      "in_sonarqube": true,
+      "discrepancies": [],
+      "metrics": {
+        "bugs_total": {
+          "postgres_value": 1,
+          "sonarqube_value": 1,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "bugs_blocker": {
+          "postgres_value": 1,
+          "sonarqube_value": 1,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "bugs_critical": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_major": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_minor": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_info": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_open": {
+          "postgres_value": 1,
+          "sonarqube_value": 1,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "bugs_confirmed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_reopened": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_resolved": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "bugs_closed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_total": {
+          "postgres_value": 2,
+          "sonarqube_value": 2,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "vulnerabilities_critical": {
+          "postgres_value": 1,
+          "sonarqube_value": 1,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "vulnerabilities_high": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_medium": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_low": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_open": {
+          "postgres_value": 2,
+          "sonarqube_value": 2,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "vulnerabilities_confirmed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_reopened": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_resolved": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "vulnerabilities_closed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "code_smells_total": {
+          "postgres_value": 30,
+          "sonarqube_value": 30,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "code_smells_blocker": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "code_smells_critical": {
+          "postgres_value": 27,
+          "sonarqube_value": 27,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "code_smells_major": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "code_smells_minor": {
+          "postgres_value": 3,
+          "sonarqube_value": 3,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "code_smells_info": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "security_hotspots_total": {
+          "postgres_value": 7,
+          "sonarqube_value": 7,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_high": {
+          "postgres_value": 7,
+          "sonarqube_value": 7,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_medium": {
+          "postgres_value": 7,
+          "sonarqube_value": 7,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_low": {
+          "postgres_value": 7,
+          "sonarqube_value": 7,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_to_review": {
+          "postgres_value": 7,
+          "sonarqube_value": 7,
+          "difference": 0,
+          "percentage_difference": 0.0,
+          "match": true
+        },
+        "security_hotspots_reviewed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "security_hotspots_acknowledged": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "security_hotspots_fixed": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "coverage_percentage": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "duplicated_lines_density": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "new_code_bugs_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_vulnerabilities_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_code_smells_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_security_hotspots_total": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        },
+        "new_code_coverage_percentage": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "new_code_duplicated_lines_density": {
+          "postgres_value": "0.0",
+          "sonarqube_value": 0.0,
+          "difference": null,
+          "percentage_difference": null,
+          "match": true
+        },
+        "new_code_lines": {
+          "postgres_value": 0,
+          "sonarqube_value": 0,
+          "difference": 0,
+          "percentage_difference": 0,
+          "match": true
+        }
+      },
+      "postgres_metric_date": "2025-05-27",
+      "postgres_is_carried_forward": true,
+      "data_source_timestamp": "2025-05-27T03:07:21.009396+00:00",
+      "has_discrepancies": false,
+      "discrepancy_count": 0
+    }
+  },
+  "summary": {
+    "total_projects_postgres": 2,
+    "total_projects_sonarqube": 2,
+    "projects_with_discrepancies": 0,
+    "total_discrepancies": 0,
+    "metrics_compared": 44
+  },
+  "health_status": {
+    "overall_status": "critical",
+    "data_freshness": {
+      "postgres_latest_date": "2025-05-27",
+      "postgres_data_age_days": 0,
+      "postgres_status": "healthy",
+      "carried_forward_projects": 2,
+      "carried_forward_percentage": 100.0
+    },
+    "data_completeness": {
+      "total_unique_projects": 2,
+      "missing_in_postgres_count": 0,
+      "missing_in_sonarqube_count": 0,
+      "completeness_percentage": 100.0
+    },
+    "sync_status": {
+      "projects_in_sync": 2,
+      "projects_with_discrepancies": 0,
+      "total_discrepancies": 0,
+      "sync_percentage": 100.0
+    },
+    "critical_issues": [
+      "2 projects (100.0%) have carried forward data"
+    ],
+    "warnings": [],
+    "checks_performed": [
+      "Data freshness (PostgreSQL latest date)",
+      "Carried forward data percentage",
+      "Data completeness (missing projects)",
+      "Sync status (discrepancy analysis)",
+      "SonarQube fetch errors"
+    ]
+  },
+  "postgres_statistics": {
+    "total_projects": 2,
+    "latest_metric_date": "2025-05-27",
+    "earliest_metric_date": "2025-05-24",
+    "total_records": 7
+  },
+  "execution_date": "2025-05-27T05:03:01.868953+00:00",
+  "dag_run_id": "manual__2025-05-27T05:03:01.868953+00:00"
+}

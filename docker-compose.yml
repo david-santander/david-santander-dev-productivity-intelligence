@@ -100,6 +100,7 @@ services:
       - ./sonarqube-etl/airflow/dags:/opt/airflow/dags
       - ./sonarqube-etl/airflow/logs:/opt/airflow/logs
       - ./sonarqube-etl/airflow/plugins:/opt/airflow/plugins
+      - ./sonarqube-etl/airflow/reports:/opt/airflow/reports
     ports:
       - "8082:8080"
     command: webserver
@@ -130,6 +131,7 @@ services:
       - ./sonarqube-etl/airflow/dags:/opt/airflow/dags
       - ./sonarqube-etl/airflow/logs:/opt/airflow/logs
       - ./sonarqube-etl/airflow/plugins:/opt/airflow/plugins
+      - ./sonarqube-etl/airflow/reports:/opt/airflow/reports
     command: scheduler
     networks:
       - app_net
