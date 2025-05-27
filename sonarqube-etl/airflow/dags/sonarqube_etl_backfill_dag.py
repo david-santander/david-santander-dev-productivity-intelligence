@@ -46,6 +46,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.models import Variable
+from airflow.datasets import Dataset
 import logging
 import os
 from typing import Dict, List, Any, Optional, Tuple
@@ -54,6 +55,9 @@ from dateutil import parser
 
 # Import the shared SonarQube client
 from sonarqube_client import SonarQubeClient
+
+# Define dataset for data-aware scheduling
+SONARQUBE_METRICS_DATASET = Dataset("postgres://sonarqube_metrics_db/daily_project_metrics")
 
 # Import functions from main ETL DAG that aren't API-related
 from sonarqube_etl_dag import (
@@ -663,7 +667,10 @@ extract_historical_metrics_task = PythonOperator(
 )
 
 load_historical_metrics_task = PythonOperator(
-    task_id="load_historical_metrics", python_callable=load_historical_metrics, dag=dag
+    task_id="load_historical_metrics", 
+    python_callable=load_historical_metrics,
+    outlets=[SONARQUBE_METRICS_DATASET],  # Emit dataset on completion
+    dag=dag
 )
 
 validate_backfill_task = PythonOperator(

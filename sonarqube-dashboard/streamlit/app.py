@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import psycopg2
+from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 import os
 from typing import Dict, List, Tuple, Any
@@ -45,9 +46,23 @@ DATE_RANGES = {
 }
 
 @st.cache_resource
+def get_connection_pool():
+    """Create and return a connection pool"""
+    return pool.ThreadedConnectionPool(
+        minconn=1,
+        maxconn=10,
+        **DB_CONFIG
+    )
+
 def get_db_connection():
-    """Create and return a database connection"""
-    return psycopg2.connect(**DB_CONFIG)
+    """Get connection from pool"""
+    pool_obj = get_connection_pool()
+    return pool_obj.getconn()
+
+def return_connection(conn):
+    """Return connection to pool"""
+    pool_obj = get_connection_pool()
+    pool_obj.putconn(conn)
 
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def fetch_projects() -> List[Dict]:
@@ -57,10 +72,13 @@ def fetch_projects() -> List[Dict]:
         FROM sonarqube_metrics.sq_projects
         ORDER BY project_name
     """
-    with get_db_connection() as conn:
+    conn = get_db_connection()
+    try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(query)
             return cur.fetchall()
+    finally:
+        return_connection(conn)
 
 @st.cache_data(ttl=300)
 def fetch_metrics_data(project_ids: List[int], start_date: str, end_date: str) -> pd.DataFrame:
@@ -76,9 +94,12 @@ def fetch_metrics_data(project_ids: List[int], start_date: str, end_date: str) -
         AND m.metric_date BETWEEN %s AND %s
         ORDER BY m.metric_date DESC, p.project_name
     """
-    with get_db_connection() as conn:
+    conn = get_db_connection()
+    try:
         df = pd.read_sql_query(query, conn, params=[project_ids, start_date, end_date])
-    return df
+        return df
+    finally:
+        return_connection(conn)
 
 def calculate_trend(current_value: float, previous_value: float, threshold: float = 2.0) -> Tuple[str, str]:
     """Calculate trend indicator and direction"""

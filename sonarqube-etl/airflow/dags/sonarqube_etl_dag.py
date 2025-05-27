@@ -30,6 +30,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.models import Variable
+from airflow.datasets import Dataset
 import logging
 import os
 from typing import Dict, List, Any, Optional, Tuple
@@ -38,6 +39,9 @@ from dateutil import parser
 
 # Import the shared SonarQube client
 from sonarqube_client import SonarQubeClient
+
+# Define dataset for data-aware scheduling
+SONARQUBE_METRICS_DATASET = Dataset("postgres://sonarqube_metrics_db/daily_project_metrics")
 
 # Default args for the DAG
 default_args = {
@@ -403,6 +407,7 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
         - Handles missing values with sensible defaults (0 for counts)
         - Parses new code period date if available
         - Sets is_carried_forward to False for actual data
+        - Uses calculated totals for verification if available
         
     Example:
         >>> raw_data = {
@@ -427,9 +432,47 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
         except:
             new_code_period_date = None
     
+    # Calculate totals from breakdowns for verification
+    bugs_breakdown_total = (
+        issues.get('bug_blocker', 0) +
+        issues.get('bug_critical', 0) +
+        issues.get('bug_major', 0) +
+        issues.get('bug_minor', 0) +
+        issues.get('bug_info', 0)
+    )
+    
+    vulnerabilities_breakdown_total = (
+        issues.get('vulnerability_critical', 0) +
+        issues.get('vulnerability_major', 0) +
+        issues.get('vulnerability_minor', 0) +
+        issues.get('vulnerability_info', 0)
+    )
+    
+    code_smells_breakdown_total = (
+        issues.get('code_smell_blocker', 0) +
+        issues.get('code_smell_critical', 0) +
+        issues.get('code_smell_major', 0) +
+        issues.get('code_smell_minor', 0) +
+        issues.get('code_smell_info', 0)
+    )
+    
+    # Use calculated totals if they match or exceed the metric totals
+    # This handles cases where the API might not return all issues in the total
+    bugs_total = max(int(metrics.get('bugs', 0)), bugs_breakdown_total)
+    vulnerabilities_total = max(int(metrics.get('vulnerabilities', 0)), vulnerabilities_breakdown_total)
+    code_smells_total = max(int(metrics.get('code_smells', 0)), code_smells_breakdown_total)
+    
+    # Log if there's a discrepancy
+    if bugs_total != int(metrics.get('bugs', 0)):
+        logging.warning(f"Bugs total mismatch: API={metrics.get('bugs', 0)}, Breakdown={bugs_breakdown_total}, Using={bugs_total}")
+    if vulnerabilities_total != int(metrics.get('vulnerabilities', 0)):
+        logging.warning(f"Vulnerabilities total mismatch: API={metrics.get('vulnerabilities', 0)}, Breakdown={vulnerabilities_breakdown_total}, Using={vulnerabilities_total}")
+    if code_smells_total != int(metrics.get('code_smells', 0)):
+        logging.warning(f"Code smells total mismatch: API={metrics.get('code_smells', 0)}, Breakdown={code_smells_breakdown_total}, Using={code_smells_total}")
+    
     return {
         'metric_date': metric_data['metric_date'],
-        'bugs_total': int(metrics.get('bugs', 0)),
+        'bugs_total': bugs_total,
         'bugs_blocker': issues.get('bug_blocker', 0),
         'bugs_critical': issues.get('bug_critical', 0),
         'bugs_major': issues.get('bug_major', 0),
@@ -440,17 +483,17 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
         'bugs_reopened': issues.get('bug_reopened', 0),
         'bugs_resolved': issues.get('bug_resolved', 0),
         'bugs_closed': issues.get('bug_closed', 0),
-        'vulnerabilities_total': int(metrics.get('vulnerabilities', 0)),
+        'vulnerabilities_total': vulnerabilities_total,
         'vulnerabilities_critical': issues.get('vulnerability_critical', 0),
-        'vulnerabilities_high': issues.get('vulnerability_major', 0),
-        'vulnerabilities_medium': issues.get('vulnerability_minor', 0),
-        'vulnerabilities_low': issues.get('vulnerability_info', 0),
+        'vulnerabilities_high': issues.get('vulnerability_major', 0),  # SonarQube uses MAJOR for HIGH
+        'vulnerabilities_medium': issues.get('vulnerability_minor', 0),  # SonarQube uses MINOR for MEDIUM
+        'vulnerabilities_low': issues.get('vulnerability_info', 0),  # SonarQube uses INFO for LOW
         'vulnerabilities_open': issues.get('vulnerability_open', 0),
         'vulnerabilities_confirmed': issues.get('vulnerability_confirmed', 0),
         'vulnerabilities_reopened': issues.get('vulnerability_reopened', 0),
         'vulnerabilities_resolved': issues.get('vulnerability_resolved', 0),
         'vulnerabilities_closed': issues.get('vulnerability_closed', 0),
-        'code_smells_total': int(metrics.get('code_smells', 0)),
+        'code_smells_total': code_smells_total,
         'code_smells_blocker': issues.get('code_smell_blocker', 0),
         'code_smells_critical': issues.get('code_smell_critical', 0),
         'code_smells_major': issues.get('code_smell_major', 0),
@@ -716,6 +759,7 @@ extract_metrics_task = PythonOperator(
 transform_load_task = PythonOperator(
     task_id='transform_and_load',
     python_callable=transform_and_load_metrics,
+    outlets=[SONARQUBE_METRICS_DATASET],  # Emit dataset on completion
     dag=dag
 )
 

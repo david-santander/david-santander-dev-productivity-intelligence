@@ -261,6 +261,9 @@ class SonarQubeClient:
         
         # Fetch issues by type and severity
         for issue_type in self.issue_types:
+            # Keep track of totals for each type
+            type_total = 0
+            
             for severity in self.severities:
                 params = {
                     'componentKeys': project_key,
@@ -280,10 +283,16 @@ class SonarQubeClient:
                     )
                     response.raise_for_status()
                     key = f"{prefix}{issue_type}_{severity}".lower()
-                    issues_breakdown[key] = response.json()['total']
+                    count = response.json()['total']
+                    issues_breakdown[key] = count
+                    type_total += count
                 except Exception as e:
                     logging.warning(f"Failed to fetch issues for {issue_type}/{severity}: {str(e)}")
                     issues_breakdown[f"{prefix}{issue_type}_{severity}".lower()] = 0
+            
+            # Store the calculated total for verification
+            # This helps ensure our breakdown matches the total
+            issues_breakdown[f"{prefix}{issue_type}_calculated_total"] = type_total
             
             # Fetch issues by type and status (only for overall, not new code)
             if not is_new_code:
@@ -318,6 +327,9 @@ class SonarQubeClient:
         """
         prefix = "new_code_" if is_new_code else ""
         
+        # Calculate total for security hotspots
+        hotspot_total = 0
+        
         # Fetch by severity
         for severity in self.hotspot_severities:
             params = {
@@ -336,26 +348,37 @@ class SonarQubeClient:
                 )
                 response.raise_for_status()
                 key = f"{prefix}security_hotspot_{severity}".lower()
-                issues_breakdown[key] = response.json()['paging']['total']
+                count = response.json()['paging']['total']
+                issues_breakdown[key] = count
+                hotspot_total += count
             except Exception as e:
                 logging.warning(f"Failed to fetch hotspots for {severity}: {str(e)}")
                 issues_breakdown[f"{prefix}security_hotspot_{severity}".lower()] = 0
         
+        # Store calculated total
+        issues_breakdown[f"{prefix}security_hotspot_calculated_total"] = hotspot_total
+        
         # Fetch by status (only for overall)
         if not is_new_code:
-            for status in self.hotspot_statuses:
-                response = requests.get(
-                    f"{self.base_url}/api/hotspots/search",
-                    params={
-                        'projectKey': project_key,
-                        'status': status,
-                        'ps': 1
-                    },
-                    auth=self.auth
-                )
-                response.raise_for_status()
-                key = f"security_hotspot_{status}".lower()
-                issues_breakdown[key] = response.json()['paging']['total']
+            # Also fetch additional statuses beyond the basic two
+            extended_statuses = ['TO_REVIEW', 'REVIEWED', 'ACKNOWLEDGED', 'FIXED']
+            for status in extended_statuses:
+                try:
+                    response = requests.get(
+                        f"{self.base_url}/api/hotspots/search",
+                        params={
+                            'projectKey': project_key,
+                            'status': status,
+                            'ps': 1
+                        },
+                        auth=self.auth
+                    )
+                    response.raise_for_status()
+                    key = f"security_hotspot_{status}".lower()
+                    issues_breakdown[key] = response.json()['paging']['total']
+                except Exception as e:
+                    logging.warning(f"Failed to fetch hotspots for status {status}: {str(e)}")
+                    issues_breakdown[f"security_hotspot_{status}".lower()] = 0
     
     def fetch_metrics_smart(self, project_key: str, metric_date: str) -> Dict[str, Any]:
         """Intelligently fetch metrics using the most appropriate API.
