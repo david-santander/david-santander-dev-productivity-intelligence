@@ -12,7 +12,7 @@ COPY streamlit/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY streamlit/app_v4.py ./app.py
+COPY streamlit/app.py ./app.py
 
 # Copy Streamlit configuration
 COPY streamlit/.streamlit /app/.streamlit
