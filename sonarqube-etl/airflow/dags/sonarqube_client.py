@@ -81,11 +81,16 @@ class HotspotPriority(Enum):
     
 
 class HotspotStatus(Enum):
-    """Security hotspot status values."""
+    """Security hotspot status values (new API)."""
     TO_REVIEW = "TO_REVIEW"
-    ACKNOWLEDGED = "ACKNOWLEDGED"
+    REVIEWED = "REVIEWED"
+
+
+class HotspotResolution(Enum):
+    """Security hotspot resolution values (for REVIEWED status)."""
     FIXED = "FIXED"
     SAFE = "SAFE"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
 
 
 class MetricCategory(Enum):
@@ -330,32 +335,84 @@ class BaseMetricFetcher(ABC):
 class StandardMetricsFetcher(BaseMetricFetcher):
     """Fetches standard project metrics."""
     
+    # Define a safe subset of metrics that are commonly available
+    SAFE_BASE_METRICS = {
+        'lines', 'ncloc', 'classes', 'functions', 'files',
+        'bugs', 'vulnerabilities', 'code_smells', 'security_hotspots',
+        'violations', 'blocker_violations', 'critical_violations',
+        'major_violations', 'minor_violations', 'info_violations',
+        'reliability_rating', 'security_rating', 'sqale_rating',
+        'coverage', 'line_coverage', 'branch_coverage',
+        'duplicated_lines_density', 'duplicated_lines',
+        'complexity', 'cognitive_complexity',
+        'comment_lines', 'comment_lines_density',
+        'sqale_index', 'sqale_debt_ratio',
+        'alert_status'
+    }
+    
+    SAFE_NEW_CODE_METRICS = {
+        'new_lines', 'new_coverage', 'new_line_coverage',
+        'new_bugs', 'new_vulnerabilities', 'new_code_smells',
+        'new_security_hotspots', 'new_violations',
+        'new_duplicated_lines_density', 'new_duplicated_lines',
+        'new_reliability_rating', 'new_security_rating',
+        'new_maintainability_rating'
+    }
+    
     async def fetch(self, project_key: str, **kwargs) -> Dict[str, Any]:
         """Fetch current metrics for a project."""
-        all_metrics = list(MetricDefinitions.get_all_metrics().keys())
-        all_metrics.extend(MetricDefinitions.get_new_code_metrics())
+        # Use safe subset of metrics to avoid 404 errors
+        safe_metrics = list(self.SAFE_BASE_METRICS)
+        safe_metrics.extend(self.SAFE_NEW_CODE_METRICS)
         
-        response = await self.client._make_request(
-            'GET',
-            '/api/measures/component',
-            params={
-                'component': project_key,
-                'metricKeys': ','.join(all_metrics)
-            }
-        )
-        
-        measures = response.get('component', {}).get('measures', [])
-        metrics = {m['metric']: m.get('value', 0) for m in measures}
-        
-        # Extract new code period information
-        component_data = response.get('component', {})
-        if 'period' in component_data:
-            period = component_data['period']
-            metrics['new_code_period_date'] = period.get('date')
-            metrics['new_code_period_mode'] = period.get('mode', 'days')
-            metrics['new_code_period_value'] = period.get('value', '30')
+        try:
+            response = await self.client._make_request(
+                'GET',
+                '/api/measures/component',
+                params={
+                    'component': project_key,
+                    'metricKeys': ','.join(safe_metrics)
+                }
+            )
             
-        return metrics
+            measures = response.get('component', {}).get('measures', [])
+            metrics = {m['metric']: m.get('value', 0) for m in measures}
+            
+            # Extract new code period information
+            component_data = response.get('component', {})
+            if 'period' in component_data:
+                period = component_data['period']
+                metrics['new_code_period_date'] = period.get('date')
+                metrics['new_code_period_mode'] = period.get('mode', 'days')
+                metrics['new_code_period_value'] = period.get('value', '30')
+                
+            return metrics
+            
+        except Exception as e:
+            if "404" in str(e) and "metric keys are not found" in str(e):
+                # Handle case where some metrics don't exist
+                # Try with minimal set of metrics
+                logger.warning(f"Some metrics not found, trying minimal set: {e}")
+                
+                minimal_metrics = [
+                    'bugs', 'vulnerabilities', 'code_smells',
+                    'coverage', 'duplicated_lines_density',
+                    'ncloc', 'complexity'
+                ]
+                
+                response = await self.client._make_request(
+                    'GET',
+                    '/api/measures/component',
+                    params={
+                        'component': project_key,
+                        'metricKeys': ','.join(minimal_metrics)
+                    }
+                )
+                
+                measures = response.get('component', {}).get('measures', [])
+                return {m['metric']: m.get('value', 0) for m in measures}
+            else:
+                raise
 
 
 class HistoricalMetricsFetcher(BaseMetricFetcher):
@@ -789,7 +846,7 @@ class SonarQubeClient:
         result.metadata = {
             'fetched_at': datetime.now().isoformat(),
             'use_historical_api': use_historical,
-            'cache_hits': len([k for k in self._cache if cache_key in k])
+            'cache_hits': len(self._cache)  # Total cache size instead of specific key
         }
         
         return result

@@ -84,6 +84,7 @@ services:
   airflow-webserver:
     build: ./sonarqube-etl
     container_name: airflow-webserver
+    hostname: airflow-webserver
     depends_on:
       - postgres-airflow
       - redis
@@ -95,6 +96,12 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      AIRFLOW__WEBSERVER__BASE_URL: 'http://localhost:8082'
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: 'true'
+      AIRFLOW__LOGGING__BASE_LOG_FOLDER: '/opt/airflow/logs'
+      AIRFLOW__LOGGING__DAG_PROCESSOR_MANAGER_LOG_LOCATION: '/opt/airflow/logs/dag_processor_manager/dag_processor_manager.log'
+      AIRFLOW__SCHEDULER__CHILD_PROCESS_LOG_DIRECTORY: '/opt/airflow/logs/scheduler'
+      AIRFLOW__LOGGING__LOG_FETCH_TIMEOUT_SEC: '5'
       # SonarQube configuration
       AIRFLOW_VAR_SONARQUBE_BASE_URL: 'http://sonarqube:9000'
       AIRFLOW_VAR_SONARQUBE_TOKEN: 'squ_34a1a84bd11058208c852fc67f06416919f24d74'
@@ -116,6 +123,7 @@ services:
   airflow-scheduler:
     build: ./sonarqube-etl
     container_name: airflow-scheduler
+    hostname: airflow-scheduler
     depends_on:
       - postgres-airflow
       - redis
@@ -126,6 +134,11 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ''
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__BASE_URL: 'http://localhost:8082'
+      AIRFLOW__LOGGING__BASE_LOG_FOLDER: '/opt/airflow/logs'
+      AIRFLOW__LOGGING__DAG_PROCESSOR_MANAGER_LOG_LOCATION: '/opt/airflow/logs/dag_processor_manager/dag_processor_manager.log'
+      AIRFLOW__SCHEDULER__CHILD_PROCESS_LOG_DIRECTORY: '/opt/airflow/logs/scheduler'
+      AIRFLOW__LOGGING__LOG_FETCH_TIMEOUT_SEC: '5'
       # SonarQube configuration
       AIRFLOW_VAR_SONARQUBE_BASE_URL: 'http://sonarqube:9000'
       AIRFLOW_VAR_SONARQUBE_TOKEN: 'squ_34a1a84bd11058208c852fc67f06416919f24d74'

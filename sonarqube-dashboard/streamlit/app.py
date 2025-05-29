@@ -91,23 +91,34 @@ st.markdown("""
     
     /* Enhanced header */
     .dashboard-header {
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-        color: white;
+        background: white;
+        color: var(--text-primary);
         padding: 2rem;
         border-radius: 12px;
         margin-bottom: 2rem;
         box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
     }
     
     .dashboard-title {
         font-size: 2.5rem;
         font-weight: 700;
         margin: 0;
+        color: var(--text-primary) !important;
+    }
+    
+    .dashboard-header h1 {
+        color: var(--text-primary) !important;
+    }
+    
+    /* Override Streamlit's default h1 styling in dashboard header */
+    .dashboard-header h1.dashboard-title {
+        color: var(--text-primary) !important;
     }
     
     .dashboard-subtitle {
         font-size: 1.1rem;
-        opacity: 0.9;
+        color: var(--text-secondary) !important;
         margin-top: 0.5rem;
     }
     
@@ -545,7 +556,9 @@ class MetricsRepository:
                 else:
                     metric_columns.append(f'm.{metric}')
             
-            columns = base_columns + list(set(metric_columns))
+            # Always include rating columns
+            rating_columns = ['m.reliability_rating', 'm.security_rating', 'm.sqale_rating']
+            columns = base_columns + list(set(metric_columns)) + rating_columns
         else:
             columns = ['m.*', 'p.project_name', 'p.sonarqube_project_key']
         
@@ -895,9 +908,9 @@ class DashboardUI:
     def render_header(self):
         """Render the dashboard header."""
         st.markdown("""
-        <div class="dashboard-header">
-            <h1 class="dashboard-title">SonarQube Metrics Dashboard</h1>
-            <p class="dashboard-subtitle">
+        <div class="dashboard-header" style="background: white; color: #1f2937; padding: 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
+            <h1 class="dashboard-title" style="color: #1f2937 !important; font-size: 2.5rem; font-weight: 700; margin: 0;">SonarQube Metrics Dashboard</h1>
+            <p class="dashboard-subtitle" style="color: #6b7280 !important; font-size: 1.1rem; margin-top: 0.5rem;">
                 Real-time code quality insights and analytics
             </p>
         </div>
@@ -1040,6 +1053,7 @@ class DashboardUI:
         st.markdown('<h2 class="section-header">📈 Key Performance Indicators</h2>', 
                    unsafe_allow_html=True)
         
+        
         # Get latest and previous data
         latest_date = df['metric_date'].max()
         latest_df = df[df['metric_date'] == latest_date]
@@ -1138,8 +1152,8 @@ class DashboardUI:
                             )
                             st.markdown(card_html, unsafe_allow_html=True)
         
-        # Add quality ratings
-        if any(m in ['bugs', 'vulnerabilities', 'code_smells'] for m in selected_metrics):
+        # Add quality ratings (always show ratings regardless of selected metrics)
+        if True:  # Always show quality ratings
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
             st.markdown('<h3 class="section-header">⭐ Quality Ratings</h3>', 
                        unsafe_allow_html=True)
@@ -1147,26 +1161,52 @@ class DashboardUI:
             rating_cols = st.columns(4)
             
             rating_mappings = [
-                ('reliability_rating', 'Reliability', '🛡️'),
-                ('security_rating', 'Security', '🔒'),
-                ('sqale_rating', 'Maintainability', '🔧'),
-                ('security_review_rating', 'Security Review', '👁️')
+                ('reliability_rating', 'Reliability Rating', '🛡️'),
+                ('security_rating', 'Security Rating', '🔒'),
+                ('sqale_rating', 'Maintainability Rating', '🔧'),
+                ('security_review_rating', 'Security Review Rating', '👁️')
             ]
             
             for idx, (rating_col, label, icon) in enumerate(rating_mappings):
                 if idx < len(rating_cols) and rating_col in latest_df.columns:
                     ratings = latest_df[rating_col].dropna()
                     if not ratings.empty:
-                        # Get worst rating
-                        worst_rating = max(ratings)
+                        # Get worst rating (highest number = worst)
+                        worst_rating_num = max(ratings)
                         
+                        # Convert numeric rating to letter grade
+                        rating_map = {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E'}
+                        worst_rating_letter = rating_map.get(int(worst_rating_num), 'E')
+                        
+                        # Define colors for each rating
+                        color_map = {
+                            'A': '#22c55e',  # Green
+                            'B': '#84cc16',  # Light green
+                            'C': '#eab308',  # Yellow
+                            'D': '#f97316',  # Orange
+                            'E': '#ef4444'   # Red
+                        }
+                        badge_color = color_map.get(worst_rating_letter, '#ef4444')
+                        
+                        # Create rating card similar to KPI cards
                         with rating_cols[idx]:
-                            st.markdown(f"""
-                            <div style="text-align: center;">
-                                <div class="metric-card-title">{icon} {label}</div>
-                                <div class="rating-badge rating-{worst_rating.lower()}">{worst_rating}</div>
+                            card_html = f"""
+                            <div class="metric-card">
+                                <div class="metric-card-header">
+                                    <span class="metric-card-icon">{icon}</span>
+                                    <span class="metric-card-title">{label}</span>
+                                </div>
+                                <div class="metric-card-content">
+                                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 12px; font-weight: 700; font-size: 2rem; background-color: {badge_color}; color: white; margin: 0.5rem auto;">
+                                        {worst_rating_letter}
+                                    </div>
+                                    <div style="font-size: 0.875rem; color: #6b7280; margin-top: 0.5rem;">
+                                        Grade: {worst_rating_letter} ({int(worst_rating_num)}/5)
+                                    </div>
+                                </div>
                             </div>
-                            """, unsafe_allow_html=True)
+                            """
+                            st.markdown(card_html, unsafe_allow_html=True)
     
     def render_trends_section(self, df: pd.DataFrame, selected_metrics: List[str], 
                             project_names: List[str]):

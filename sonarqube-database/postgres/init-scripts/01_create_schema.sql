@@ -241,6 +241,7 @@ CREATE TABLE IF NOT EXISTS daily_project_metrics (
     data_source_timestamp TIMESTAMP NOT NULL,
     is_carried_forward BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
     -- Unique constraint to prevent duplicate entries
     CONSTRAINT unique_project_date UNIQUE(project_id, metric_date)
@@ -263,6 +264,10 @@ $$ language 'plpgsql';
 -- Create trigger for projects table
 CREATE TRIGGER update_sq_projects_updated_at BEFORE UPDATE
     ON sq_projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger for daily_project_metrics table
+CREATE TRIGGER update_daily_project_metrics_updated_at BEFORE UPDATE
+    ON daily_project_metrics FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Create view for latest metrics per project
 CREATE OR REPLACE VIEW latest_project_metrics AS
@@ -292,3 +297,5 @@ COMMENT ON COLUMN daily_project_metrics.technical_debt IS 'Technical debt in min
 COMMENT ON COLUMN daily_project_metrics.sqale_debt_ratio IS 'Technical debt ratio as percentage';
 COMMENT ON COLUMN daily_project_metrics.complexity IS 'Cyclomatic complexity of the project';
 COMMENT ON COLUMN daily_project_metrics.cognitive_complexity IS 'Cognitive complexity of the project';
+COMMENT ON COLUMN daily_project_metrics.created_at IS 'Timestamp when this record was first created';
+COMMENT ON COLUMN daily_project_metrics.updated_at IS 'Timestamp when this record was last updated (automatically maintained by trigger)';
