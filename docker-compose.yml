@@ -47,6 +47,8 @@ services:
       POSTGRES_DB: sonarqube_metrics
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sonarqube-database/postgres/init-scripts:/docker-entrypoint-initdb.d
@@ -62,6 +64,8 @@ services:
       POSTGRES_DB: airflow
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
+    ports:
+      - "5433:5432"
     volumes:
       - postgres_airflow_data:/var/lib/postgresql/data
     networks:

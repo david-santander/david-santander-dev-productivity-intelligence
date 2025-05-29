@@ -118,7 +118,7 @@ def calculate_trend(current_value: float, previous_value: float, threshold: floa
     else:
         return "↓", "down"
 
-def get_metric_value(df: pd.DataFrame, metric_name: str, severity: str = None, status: str = None, code_scope: str = "Overall Code") -> float:
+def get_metric_value(df: pd.DataFrame, metric_name: str, severity: str = None, status: str = None, code_scope: str = "Overall Code", priority: str = None) -> float:
     """Get the latest metric value from dataframe"""
     if df.empty:
         return 0
@@ -132,24 +132,29 @@ def get_metric_value(df: pd.DataFrame, metric_name: str, severity: str = None, s
         if severity:
             return latest[f'{prefix}bugs_{severity.lower()}']
         elif status:
-            return latest[f'bugs_{status.lower()}'] if code_scope == "Overall Code" else 0
+            status_key = status.lower().replace(' ', '_')
+            return latest[f'bugs_{status_key}'] if code_scope == "Overall Code" else 0
         else:
             return latest[f'{prefix}bugs_total']
     elif metric_name == 'Vulnerabilities':
         if severity:
             return latest[f'{prefix}vulnerabilities_{severity.lower()}']
         elif status:
-            return latest[f'vulnerabilities_{status.lower()}'] if code_scope == "Overall Code" else 0
+            status_key = status.lower().replace(' ', '_')
+            return latest[f'vulnerabilities_{status_key}'] if code_scope == "Overall Code" else 0
         else:
             return latest[f'{prefix}vulnerabilities_total']
     elif metric_name == 'Code Smells':
         if severity:
             return latest[f'{prefix}code_smells_{severity.lower()}']
+        elif status:
+            status_key = status.lower().replace(' ', '_')
+            return latest[f'code_smells_{status_key}'] if code_scope == "Overall Code" else 0
         else:
             return latest[f'{prefix}code_smells_total']
     elif metric_name == 'Security Hotspots':
-        if severity:
-            return latest[f'{prefix}security_hotspots_{severity.lower()}']
+        if priority:
+            return latest[f'{prefix}security_hotspots_{priority.lower()}']
         elif status:
             col_name = f'{prefix}security_hotspots_{status.lower().replace(" ", "_")}'
             return latest[col_name] if col_name in latest else 0
@@ -262,12 +267,12 @@ def main():
         st.sidebar.subheader("Bugs")
         bug_severities = st.sidebar.multiselect(
             "Severity",
-            options=['Blocker', 'Critical', 'Major', 'Minor'],
+            options=['Blocker', 'Critical', 'Major', 'Minor', 'Info'],
             key='bug_severity'
         )
         bug_statuses = st.sidebar.multiselect(
             "Status",
-            options=['Open', 'Confirmed', 'Reopened'],
+            options=['Open', 'Confirmed', 'Reopened', 'Resolved', 'Closed', 'False Positive', 'Wontfix'],
             key='bug_status'
         )
     
@@ -276,12 +281,12 @@ def main():
         st.sidebar.subheader("Vulnerabilities")
         vuln_severities = st.sidebar.multiselect(
             "Severity",
-            options=['Critical', 'High', 'Medium', 'Low'],
+            options=['Blocker', 'Critical', 'High', 'Medium', 'Low'],
             key='vuln_severity'
         )
         vuln_statuses = st.sidebar.multiselect(
             "Status",
-            options=['Open', 'Confirmed', 'Reopened'],
+            options=['Open', 'Confirmed', 'Reopened', 'Resolved', 'Closed', 'False Positive', 'Wontfix'],
             key='vuln_status'
         )
     
@@ -290,21 +295,26 @@ def main():
         st.sidebar.subheader("Code Smells")
         smell_severities = st.sidebar.multiselect(
             "Severity",
-            options=['Blocker', 'Critical', 'Major', 'Minor'],
+            options=['Blocker', 'Critical', 'Major', 'Minor', 'Info'],
             key='smell_severity'
+        )
+        smell_statuses = st.sidebar.multiselect(
+            "Status",
+            options=['Open', 'Confirmed', 'Reopened', 'Resolved', 'Closed', 'False Positive', 'Wontfix'],
+            key='smell_status'
         )
     
     # Security Hotspots filters
     if 'Security Hotspots' in selected_metrics:
         st.sidebar.subheader("Security Hotspots")
-        hotspot_severities = st.sidebar.multiselect(
-            "Severity",
+        hotspot_priorities = st.sidebar.multiselect(
+            "Priority",
             options=['High', 'Medium', 'Low'],
-            key='hotspot_severity'
+            key='hotspot_priority'
         )
         hotspot_statuses = st.sidebar.multiselect(
             "Status",
-            options=['To Review', 'Reviewed', 'Acknowledged', 'Fixed'],
+            options=['To Review', 'Acknowledged', 'Fixed', 'Safe'],
             key='hotspot_status'
         )
     
@@ -499,7 +509,8 @@ def main():
                             display_columns.append(f'bugs_{sev.lower()}')
                     if 'bug_statuses' in locals() and bug_statuses:
                         for status in bug_statuses:
-                            display_columns.append(f'bugs_{status.lower()}')
+                            status_key = status.lower().replace(' ', '_')
+                            display_columns.append(f'bugs_{status_key}')
                             
                 elif metric == 'Vulnerabilities':
                     display_columns.append('vulnerabilities_total')
@@ -508,19 +519,24 @@ def main():
                             display_columns.append(f'vulnerabilities_{sev.lower()}')
                     if 'vuln_statuses' in locals() and vuln_statuses:
                         for status in vuln_statuses:
-                            display_columns.append(f'vulnerabilities_{status.lower()}')
+                            status_key = status.lower().replace(' ', '_')
+                            display_columns.append(f'vulnerabilities_{status_key}')
                             
                 elif metric == 'Code Smells':
                     display_columns.append('code_smells_total')
                     if 'smell_severities' in locals() and smell_severities:
                         for sev in smell_severities:
                             display_columns.append(f'code_smells_{sev.lower()}')
+                    if 'smell_statuses' in locals() and smell_statuses:
+                        for status in smell_statuses:
+                            status_key = status.lower().replace(' ', '_')
+                            display_columns.append(f'code_smells_{status_key}')
                             
                 elif metric == 'Security Hotspots':
                     display_columns.append('security_hotspots_total')
-                    if 'hotspot_severities' in locals() and hotspot_severities:
-                        for sev in hotspot_severities:
-                            display_columns.append(f'security_hotspots_{sev.lower()}')
+                    if 'hotspot_priorities' in locals() and hotspot_priorities:
+                        for priority in hotspot_priorities:
+                            display_columns.append(f'security_hotspots_{priority.lower()}')
                     if 'hotspot_statuses' in locals() and hotspot_statuses:
                         for status in hotspot_statuses:
                             status_key = status.lower().replace(' ', '_')
@@ -552,7 +568,16 @@ def main():
                 'coverage_percentage': 'Coverage %',
                 'duplicated_lines_density': 'Duplication %',
                 'is_carried_forward': 'Carried Forward',
-                'data_source_timestamp': 'Last Updated'
+                'data_source_timestamp': 'Last Updated',
+                # Security hotspot priorities (not severities)
+                'security_hotspots_high': 'Security Hotspots - High Priority',
+                'security_hotspots_medium': 'Security Hotspots - Medium Priority',
+                'security_hotspots_low': 'Security Hotspots - Low Priority',
+                # Security hotspot statuses
+                'security_hotspots_to_review': 'Security Hotspots - To Review',
+                'security_hotspots_acknowledged': 'Security Hotspots - Acknowledged',
+                'security_hotspots_fixed': 'Security Hotspots - Fixed',
+                'security_hotspots_safe': 'Security Hotspots - Safe'
             }
             
             display_df = display_df.rename(columns=column_rename)

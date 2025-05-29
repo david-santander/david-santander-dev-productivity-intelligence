@@ -69,8 +69,11 @@ METRIC_FIELDS = [
     "bugs_reopened",
     "bugs_resolved",
     "bugs_closed",
+    "bugs_false_positive",
+    "bugs_wontfix",
     # Vulnerability metrics
     "vulnerabilities_total",
+    "vulnerabilities_blocker",
     "vulnerabilities_critical",
     "vulnerabilities_high",
     "vulnerabilities_medium",
@@ -80,6 +83,8 @@ METRIC_FIELDS = [
     "vulnerabilities_reopened",
     "vulnerabilities_resolved",
     "vulnerabilities_closed",
+    "vulnerabilities_false_positive",
+    "vulnerabilities_wontfix",
     # Code smell metrics
     "code_smells_total",
     "code_smells_blocker",
@@ -87,23 +92,53 @@ METRIC_FIELDS = [
     "code_smells_major",
     "code_smells_minor",
     "code_smells_info",
+    "code_smells_open",
+    "code_smells_confirmed",
+    "code_smells_reopened",
+    "code_smells_resolved",
+    "code_smells_closed",
+    "code_smells_false_positive",
+    "code_smells_wontfix",
     # Security hotspot metrics
     "security_hotspots_total",
     "security_hotspots_high",
     "security_hotspots_medium",
     "security_hotspots_low",
     "security_hotspots_to_review",
-    "security_hotspots_reviewed",
     "security_hotspots_acknowledged",
     "security_hotspots_fixed",
+    "security_hotspots_safe",
     # Quality metrics
     "coverage_percentage",
     "duplicated_lines_density",
-    # New code metrics
+    # New code bug metrics
     "new_code_bugs_total",
+    "new_code_bugs_blocker",
+    "new_code_bugs_critical",
+    "new_code_bugs_major",
+    "new_code_bugs_minor",
+    "new_code_bugs_info",
+    # New code vulnerability metrics
     "new_code_vulnerabilities_total",
+    "new_code_vulnerabilities_blocker",
+    "new_code_vulnerabilities_critical",
+    "new_code_vulnerabilities_high",
+    "new_code_vulnerabilities_medium",
+    "new_code_vulnerabilities_low",
+    # New code code smell metrics
     "new_code_code_smells_total",
+    "new_code_code_smells_blocker",
+    "new_code_code_smells_critical",
+    "new_code_code_smells_major",
+    "new_code_code_smells_minor",
+    "new_code_code_smells_info",
+    # New code security hotspot metrics
     "new_code_security_hotspots_total",
+    "new_code_security_hotspots_high",
+    "new_code_security_hotspots_medium",
+    "new_code_security_hotspots_low",
+    "new_code_security_hotspots_to_review",
+    # New code quality metrics
     "new_code_coverage_percentage",
     "new_code_duplicated_lines_density",
     "new_code_lines",
@@ -368,6 +403,7 @@ def transform_sonarqube_to_db_format(
         Transformed data matching database column names
     """
     return {
+        # Bug metrics
         "bugs_total": int(metrics.get("bugs", 0)),
         "bugs_blocker": issues.get("bug_blocker", 0),
         "bugs_critical": issues.get("bug_critical", 0),
@@ -379,7 +415,11 @@ def transform_sonarqube_to_db_format(
         "bugs_reopened": issues.get("bug_reopened", 0),
         "bugs_resolved": issues.get("bug_resolved", 0),
         "bugs_closed": issues.get("bug_closed", 0),
+        "bugs_false_positive": issues.get("bug_false-positive", 0),
+        "bugs_wontfix": issues.get("bug_wontfix", 0),
+        # Vulnerability metrics
         "vulnerabilities_total": int(metrics.get("vulnerabilities", 0)),
+        "vulnerabilities_blocker": issues.get("vulnerability_blocker", 0),
         "vulnerabilities_critical": issues.get("vulnerability_critical", 0),
         "vulnerabilities_high": issues.get("vulnerability_major", 0),
         "vulnerabilities_medium": issues.get("vulnerability_minor", 0),
@@ -389,34 +429,64 @@ def transform_sonarqube_to_db_format(
         "vulnerabilities_reopened": issues.get("vulnerability_reopened", 0),
         "vulnerabilities_resolved": issues.get("vulnerability_resolved", 0),
         "vulnerabilities_closed": issues.get("vulnerability_closed", 0),
+        "vulnerabilities_false_positive": issues.get("vulnerability_false-positive", 0),
+        "vulnerabilities_wontfix": issues.get("vulnerability_wontfix", 0),
+        # Code smell metrics
         "code_smells_total": int(metrics.get("code_smells", 0)),
         "code_smells_blocker": issues.get("code_smell_blocker", 0),
         "code_smells_critical": issues.get("code_smell_critical", 0),
         "code_smells_major": issues.get("code_smell_major", 0),
         "code_smells_minor": issues.get("code_smell_minor", 0),
         "code_smells_info": issues.get("code_smell_info", 0),
+        "code_smells_open": issues.get("code_smell_open", 0),
+        "code_smells_confirmed": issues.get("code_smell_confirmed", 0),
+        "code_smells_reopened": issues.get("code_smell_reopened", 0),
+        "code_smells_resolved": issues.get("code_smell_resolved", 0),
+        "code_smells_closed": issues.get("code_smell_closed", 0),
+        "code_smells_false_positive": issues.get("code_smell_false-positive", 0),
+        "code_smells_wontfix": issues.get("code_smell_wontfix", 0),
+        # Security hotspot metrics
         "security_hotspots_total": int(metrics.get("security_hotspots", 0)),
         "security_hotspots_high": issues.get("security_hotspot_high", 0),
         "security_hotspots_medium": issues.get("security_hotspot_medium", 0),
         "security_hotspots_low": issues.get("security_hotspot_low", 0),
         "security_hotspots_to_review": issues.get("security_hotspot_to_review", 0),
-        "security_hotspots_reviewed": issues.get("security_hotspot_reviewed", 0),
-        "security_hotspots_acknowledged": issues.get(
-            "security_hotspot_acknowledged", 0
-        ),
+        "security_hotspots_acknowledged": issues.get("security_hotspot_acknowledged", 0),
         "security_hotspots_fixed": issues.get("security_hotspot_fixed", 0),
+        "security_hotspots_safe": issues.get("security_hotspot_safe", 0),
+        # Quality metrics
         "coverage_percentage": float(metrics.get("coverage", 0)),
         "duplicated_lines_density": float(metrics.get("duplicated_lines_density", 0)),
+        # New code bug metrics
         "new_code_bugs_total": int(metrics.get("new_bugs", 0)),
+        "new_code_bugs_blocker": new_code_issues.get("new_code_bug_blocker", 0),
+        "new_code_bugs_critical": new_code_issues.get("new_code_bug_critical", 0),
+        "new_code_bugs_major": new_code_issues.get("new_code_bug_major", 0),
+        "new_code_bugs_minor": new_code_issues.get("new_code_bug_minor", 0),
+        "new_code_bugs_info": new_code_issues.get("new_code_bug_info", 0),
+        # New code vulnerability metrics
         "new_code_vulnerabilities_total": int(metrics.get("new_vulnerabilities", 0)),
+        "new_code_vulnerabilities_blocker": new_code_issues.get("new_code_vulnerability_blocker", 0),
+        "new_code_vulnerabilities_critical": new_code_issues.get("new_code_vulnerability_critical", 0),
+        "new_code_vulnerabilities_high": new_code_issues.get("new_code_vulnerability_major", 0),
+        "new_code_vulnerabilities_medium": new_code_issues.get("new_code_vulnerability_minor", 0),
+        "new_code_vulnerabilities_low": new_code_issues.get("new_code_vulnerability_info", 0),
+        # New code code smell metrics
         "new_code_code_smells_total": int(metrics.get("new_code_smells", 0)),
-        "new_code_security_hotspots_total": int(
-            metrics.get("new_security_hotspots", 0)
-        ),
+        "new_code_code_smells_blocker": new_code_issues.get("new_code_code_smell_blocker", 0),
+        "new_code_code_smells_critical": new_code_issues.get("new_code_code_smell_critical", 0),
+        "new_code_code_smells_major": new_code_issues.get("new_code_code_smell_major", 0),
+        "new_code_code_smells_minor": new_code_issues.get("new_code_code_smell_minor", 0),
+        "new_code_code_smells_info": new_code_issues.get("new_code_code_smell_info", 0),
+        # New code security hotspot metrics
+        "new_code_security_hotspots_total": int(metrics.get("new_security_hotspots", 0)),
+        "new_code_security_hotspots_high": new_code_issues.get("new_code_security_hotspot_high", 0),
+        "new_code_security_hotspots_medium": new_code_issues.get("new_code_security_hotspot_medium", 0),
+        "new_code_security_hotspots_low": new_code_issues.get("new_code_security_hotspot_low", 0),
+        "new_code_security_hotspots_to_review": new_code_issues.get("new_code_security_hotspot_to_review", 0),
+        # New code quality metrics
         "new_code_coverage_percentage": float(metrics.get("new_coverage", 0)),
-        "new_code_duplicated_lines_density": float(
-            metrics.get("new_duplicated_lines_density", 0)
-        ),
+        "new_code_duplicated_lines_density": float(metrics.get("new_duplicated_lines_density", 0)),
         "new_code_lines": int(metrics.get("new_lines", 0)),
     }
 
@@ -810,6 +880,136 @@ def calculate_health_status(
     return health_status
 
 
+def analyze_discrepancy_patterns(discrepancies: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Analyze patterns in discrepancies to identify common issues.
+    
+    Args:
+        discrepancies: List of discrepancy dictionaries
+        
+    Returns:
+        Dictionary of pattern descriptions
+    """
+    patterns = {}
+    
+    # Group discrepancies by type
+    severity_discrepancies = []
+    status_discrepancies = []
+    total_discrepancies = []
+    new_code_discrepancies = []
+    
+    for disc in discrepancies:
+        metric = disc["metric"]
+        
+        if any(sev in metric for sev in ["blocker", "critical", "major", "minor", "info", "high", "medium", "low"]):
+            severity_discrepancies.append(metric)
+        elif any(status in metric for status in ["open", "confirmed", "reopened", "resolved", "closed", "false_positive", "wontfix", "to_review", "acknowledged", "fixed", "safe"]):
+            status_discrepancies.append(metric)
+        elif metric.endswith("_total"):
+            total_discrepancies.append(metric)
+        elif metric.startswith("new_code_"):
+            new_code_discrepancies.append(metric)
+    
+    # Report patterns
+    if severity_discrepancies:
+        patterns["Severity breakdown mismatch"] = f"{len(severity_discrepancies)} metrics affected"
+    if status_discrepancies:
+        patterns["Status tracking discrepancy"] = f"{len(status_discrepancies)} metrics affected"
+    if total_discrepancies:
+        patterns["Total count mismatch"] = f"{len(total_discrepancies)} metrics affected"
+    if new_code_discrepancies:
+        patterns["New code metrics variance"] = f"{len(new_code_discrepancies)} metrics affected"
+        
+    return patterns
+
+
+def validate_new_metrics(comparison_results: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+    """Validate that new metrics are being captured correctly.
+    
+    Args:
+        comparison_results: Comparison data structure
+        
+    Returns:
+        Validation results by category
+    """
+    validation_results = {}
+    
+    # Check if any project has data
+    has_data = len(comparison_results.get("projects", {})) > 0
+    
+    if not has_data:
+        return {
+            "Overall": {
+                "status": "error",
+                "details": "No projects found for validation"
+            }
+        }
+    
+    # Define validation checks
+    validation_checks = {
+        "Vulnerabilities BLOCKER Severity": {
+            "metrics": ["vulnerabilities_blocker", "new_code_vulnerabilities_blocker"],
+            "description": "BLOCKER severity for vulnerabilities"
+        },
+        "Issues FALSE-POSITIVE Status": {
+            "metrics": ["bugs_false_positive", "vulnerabilities_false_positive", "code_smells_false_positive"],
+            "description": "FALSE-POSITIVE status for all issue types"
+        },
+        "Issues WONTFIX Status": {
+            "metrics": ["bugs_wontfix", "vulnerabilities_wontfix", "code_smells_wontfix"],
+            "description": "WONTFIX status for all issue types"
+        },
+        "Code Smells Status Tracking": {
+            "metrics": ["code_smells_open", "code_smells_confirmed", "code_smells_reopened", 
+                       "code_smells_resolved", "code_smells_closed"],
+            "description": "Complete status tracking for code smells"
+        },
+        "Security Hotspots SAFE Status": {
+            "metrics": ["security_hotspots_safe"],
+            "description": "SAFE status for security hotspots"
+        },
+        "New Code Severity Breakdown": {
+            "metrics": ["new_code_bugs_blocker", "new_code_vulnerabilities_blocker", 
+                       "new_code_code_smells_blocker"],
+            "description": "Complete severity breakdown for new code"
+        }
+    }
+    
+    # Perform validation checks
+    for check_name, check_config in validation_checks.items():
+        metrics_found = 0
+        metrics_with_data = 0
+        
+        for project_data in comparison_results["projects"].values():
+            if "metrics" not in project_data:
+                continue
+                
+            for metric in check_config["metrics"]:
+                if metric in project_data["metrics"]:
+                    metrics_found += 1
+                    # Check if either PostgreSQL or SonarQube has non-zero data
+                    metric_data = project_data["metrics"][metric]
+                    if (metric_data.get("postgres_value", 0) != 0 or 
+                        metric_data.get("sonarqube_value", 0) != 0):
+                        metrics_with_data += 1
+        
+        if metrics_found == 0:
+            status = "error"
+            details = f"Metrics not found in comparison data"
+        elif metrics_with_data == 0:
+            status = "warning"
+            details = f"Metrics present but no data captured yet"
+        else:
+            status = "valid"
+            details = f"{metrics_with_data}/{metrics_found} metrics have data"
+            
+        validation_results[check_name] = {
+            "status": status,
+            "details": details
+        }
+    
+    return validation_results
+
+
 def generate_markdown_report(comparison_results: Dict[str, Any]) -> str:
     """Generate a Markdown formatted comparison report.
 
@@ -969,17 +1169,21 @@ def generate_markdown_report(comparison_results: Dict[str, Any]) -> str:
 
     # Group metrics by type
     metric_types = {
-        "Bugs": [m for m in METRIC_FIELDS if m.startswith("bugs_")],
+        "Bugs": [m for m in METRIC_FIELDS if m.startswith("bugs_") and not m.startswith("new_code_")],
         "Vulnerabilities": [
-            m for m in METRIC_FIELDS if m.startswith("vulnerabilities_")
+            m for m in METRIC_FIELDS if m.startswith("vulnerabilities_") and not m.startswith("new_code_")
         ],
-        "Code Smells": [m for m in METRIC_FIELDS if m.startswith("code_smells_")],
+        "Code Smells": [m for m in METRIC_FIELDS if m.startswith("code_smells_") and not m.startswith("new_code_")],
         "Security Hotspots": [
-            m for m in METRIC_FIELDS if m.startswith("security_hotspots_")
+            m for m in METRIC_FIELDS if m.startswith("security_hotspots_") and not m.startswith("new_code_")
         ],
-        "Coverage": [m for m in METRIC_FIELDS if "coverage" in m],
-        "Duplication": [m for m in METRIC_FIELDS if "duplicated" in m],
-        "New Code": [m for m in METRIC_FIELDS if m.startswith("new_code_")],
+        "Coverage": [m for m in METRIC_FIELDS if "coverage" in m and not m.startswith("new_code_")],
+        "Duplication": [m for m in METRIC_FIELDS if "duplicated" in m and not m.startswith("new_code_")],
+        "New Code - Bugs": [m for m in METRIC_FIELDS if m.startswith("new_code_bugs_")],
+        "New Code - Vulnerabilities": [m for m in METRIC_FIELDS if m.startswith("new_code_vulnerabilities_")],
+        "New Code - Code Smells": [m for m in METRIC_FIELDS if m.startswith("new_code_code_smells_")],
+        "New Code - Security Hotspots": [m for m in METRIC_FIELDS if m.startswith("new_code_security_hotspots_")],
+        "New Code - Quality": [m for m in METRIC_FIELDS if m.startswith("new_code_") and any(q in m for q in ["coverage", "duplicated", "lines"])],
     }
 
     for type_name, metrics in metric_types.items():
@@ -996,6 +1200,28 @@ def generate_markdown_report(comparison_results: Dict[str, Any]) -> str:
             f"| {type_name} | {total_fields} | {fields_with_data} | {coverage_pct}% |"
         )
 
+    # Add Metric Validation Section
+    md_lines.extend(
+        [
+            f"",
+            f"## Metric Validation Report",
+            f"",
+            f"### New Metrics Validation",
+            f"",
+            f"| Metric Category | Status | Details |",
+            f"|-----------------|--------|---------|",
+        ]
+    )
+    
+    # Validate new metrics are being captured
+    validation_results = validate_new_metrics(comparison_results)
+    
+    for category, result in validation_results.items():
+        status_icon = "✅" if result["status"] == "valid" else "⚠️"
+        md_lines.append(
+            f"| {category} | {status_icon} {result['status']} | {result['details']} |"
+        )
+    
     # Add ETL Process Health
     md_lines.extend(
         [
@@ -1124,6 +1350,18 @@ def generate_markdown_report(comparison_results: Dict[str, Any]) -> str:
                 )
 
             md_lines.append("")
+            
+            # Add severity/status breakdown for discrepancies
+            discrepancy_breakdown = analyze_discrepancy_patterns(project_data["discrepancies"])
+            if discrepancy_breakdown:
+                md_lines.extend([
+                    f"",
+                    f"**Discrepancy Analysis:**",
+                    f"",
+                ])
+                for pattern, details in discrepancy_breakdown.items():
+                    md_lines.append(f"- {pattern}: {details}")
+                md_lines.append("")
 
     # Add projects with issues
     missing_in_postgres = [

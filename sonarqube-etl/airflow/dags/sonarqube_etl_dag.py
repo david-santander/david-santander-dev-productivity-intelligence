@@ -316,15 +316,20 @@ def transform_and_load_metrics(**context) -> None:
     
     try:
         # First, ensure all projects exist in the database
-        for project_key, project_name in project_map.items():
+        for project in projects:
+            project_key = project['key']
+            project_name = project['name']
+            last_analysis_date = project.get('lastAnalysisDate')
+            
             cursor.execute("""
-                INSERT INTO sonarqube_metrics.sq_projects (sonarqube_project_key, project_name)
-                VALUES (%s, %s)
+                INSERT INTO sonarqube_metrics.sq_projects (sonarqube_project_key, project_name, last_analysis_date_from_sq)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (sonarqube_project_key) DO UPDATE
                 SET project_name = EXCLUDED.project_name,
+                    last_analysis_date_from_sq = EXCLUDED.last_analysis_date_from_sq,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING project_id
-            """, (project_key, project_name))
+            """, (project_key, project_name, last_analysis_date))
             
         conn.commit()
         
@@ -442,6 +447,7 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
     )
     
     vulnerabilities_breakdown_total = (
+        issues.get('vulnerability_blocker', 0) +
         issues.get('vulnerability_critical', 0) +
         issues.get('vulnerability_major', 0) +
         issues.get('vulnerability_minor', 0) +
@@ -462,13 +468,37 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
     vulnerabilities_total = max(int(metrics.get('vulnerabilities', 0)), vulnerabilities_breakdown_total)
     code_smells_total = max(int(metrics.get('code_smells', 0)), code_smells_breakdown_total)
     
-    # Log if there's a discrepancy
-    if bugs_total != int(metrics.get('bugs', 0)):
+    # Log if there's a discrepancy (only log if API value exists and is non-zero)
+    if int(metrics.get('bugs', 0)) > 0 and bugs_total != int(metrics.get('bugs', 0)):
         logging.warning(f"Bugs total mismatch: API={metrics.get('bugs', 0)}, Breakdown={bugs_breakdown_total}, Using={bugs_total}")
-    if vulnerabilities_total != int(metrics.get('vulnerabilities', 0)):
+    if int(metrics.get('vulnerabilities', 0)) > 0 and vulnerabilities_total != int(metrics.get('vulnerabilities', 0)):
         logging.warning(f"Vulnerabilities total mismatch: API={metrics.get('vulnerabilities', 0)}, Breakdown={vulnerabilities_breakdown_total}, Using={vulnerabilities_total}")
-    if code_smells_total != int(metrics.get('code_smells', 0)):
+    if int(metrics.get('code_smells', 0)) > 0 and code_smells_total != int(metrics.get('code_smells', 0)):
         logging.warning(f"Code smells total mismatch: API={metrics.get('code_smells', 0)}, Breakdown={code_smells_breakdown_total}, Using={code_smells_total}")
+    
+    # Log when using breakdown total because API returned 0
+    if int(metrics.get('bugs', 0)) == 0 and bugs_breakdown_total > 0:
+        logging.info(f"Using breakdown total for bugs: {bugs_breakdown_total} (API returned 0)")
+    if int(metrics.get('vulnerabilities', 0)) == 0 and vulnerabilities_breakdown_total > 0:
+        logging.info(f"Using breakdown total for vulnerabilities: {vulnerabilities_breakdown_total} (API returned 0)")
+    if int(metrics.get('code_smells', 0)) == 0 and code_smells_breakdown_total > 0:
+        logging.info(f"Using breakdown total for code_smells: {code_smells_breakdown_total} (API returned 0)")
+    
+    # For security hotspots, ensure total is at least as high as sum of all statuses
+    # This handles cases where the measures API might return an outdated total
+    security_hotspots_api_total = int(metrics.get('security_hotspots', 0))
+    security_hotspots_to_review = issues.get('security_hotspot_to_review', 0)
+    security_hotspots_acknowledged = issues.get('security_hotspot_acknowledged', 0)
+    security_hotspots_fixed = issues.get('security_hotspot_fixed', 0)
+    security_hotspots_safe = issues.get('security_hotspot_safe', 0)
+    security_hotspots_status_total = (security_hotspots_to_review + security_hotspots_acknowledged + 
+                                     security_hotspots_fixed + security_hotspots_safe)
+    
+    # Use the maximum of API total or status total
+    security_hotspots_total = max(security_hotspots_api_total, security_hotspots_status_total)
+    
+    if security_hotspots_total != security_hotspots_api_total:
+        logging.warning(f"Security hotspots total adjusted: API={security_hotspots_api_total}, Status Total={security_hotspots_status_total}, Using={security_hotspots_total}")
     
     return {
         'metric_date': metric_data['metric_date'],
@@ -483,7 +513,10 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
         'bugs_reopened': issues.get('bug_reopened', 0),
         'bugs_resolved': issues.get('bug_resolved', 0),
         'bugs_closed': issues.get('bug_closed', 0),
+        'bugs_false_positive': issues.get('bug_false-positive', 0),
+        'bugs_wontfix': issues.get('bug_wontfix', 0),
         'vulnerabilities_total': vulnerabilities_total,
+        'vulnerabilities_blocker': issues.get('vulnerability_blocker', 0),
         'vulnerabilities_critical': issues.get('vulnerability_critical', 0),
         'vulnerabilities_high': issues.get('vulnerability_major', 0),  # SonarQube uses MAJOR for HIGH
         'vulnerabilities_medium': issues.get('vulnerability_minor', 0),  # SonarQube uses MINOR for MEDIUM
@@ -493,20 +526,29 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
         'vulnerabilities_reopened': issues.get('vulnerability_reopened', 0),
         'vulnerabilities_resolved': issues.get('vulnerability_resolved', 0),
         'vulnerabilities_closed': issues.get('vulnerability_closed', 0),
+        'vulnerabilities_false_positive': issues.get('vulnerability_false-positive', 0),
+        'vulnerabilities_wontfix': issues.get('vulnerability_wontfix', 0),
         'code_smells_total': code_smells_total,
         'code_smells_blocker': issues.get('code_smell_blocker', 0),
         'code_smells_critical': issues.get('code_smell_critical', 0),
         'code_smells_major': issues.get('code_smell_major', 0),
         'code_smells_minor': issues.get('code_smell_minor', 0),
         'code_smells_info': issues.get('code_smell_info', 0),
-        'security_hotspots_total': int(metrics.get('security_hotspots', 0)),
+        'code_smells_open': issues.get('code_smell_open', 0),
+        'code_smells_confirmed': issues.get('code_smell_confirmed', 0),
+        'code_smells_reopened': issues.get('code_smell_reopened', 0),
+        'code_smells_resolved': issues.get('code_smell_resolved', 0),
+        'code_smells_closed': issues.get('code_smell_closed', 0),
+        'code_smells_false_positive': issues.get('code_smell_false-positive', 0),
+        'code_smells_wontfix': issues.get('code_smell_wontfix', 0),
+        'security_hotspots_total': security_hotspots_total,  # Use adjusted total
         'security_hotspots_high': issues.get('security_hotspot_high', 0),
         'security_hotspots_medium': issues.get('security_hotspot_medium', 0),
         'security_hotspots_low': issues.get('security_hotspot_low', 0),
-        'security_hotspots_to_review': issues.get('security_hotspot_to_review', 0),
-        'security_hotspots_reviewed': issues.get('security_hotspot_reviewed', 0),
-        'security_hotspots_acknowledged': issues.get('security_hotspot_acknowledged', 0),
-        'security_hotspots_fixed': issues.get('security_hotspot_fixed', 0),
+        'security_hotspots_to_review': security_hotspots_to_review,
+        'security_hotspots_acknowledged': security_hotspots_acknowledged,
+        'security_hotspots_fixed': security_hotspots_fixed,
+        'security_hotspots_safe': security_hotspots_safe,
         'coverage_percentage': float(metrics.get('coverage', 0)),
         'duplicated_lines_density': float(metrics.get('duplicated_lines_density', 0)),
         'data_source_timestamp': datetime.now(),
@@ -519,6 +561,7 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
         'new_code_bugs_minor': new_code_issues.get('new_code_bug_minor', 0),
         'new_code_bugs_info': new_code_issues.get('new_code_bug_info', 0),
         'new_code_vulnerabilities_total': int(metrics.get('new_vulnerabilities', 0)),
+        'new_code_vulnerabilities_blocker': new_code_issues.get('new_code_vulnerability_blocker', 0),
         'new_code_vulnerabilities_critical': new_code_issues.get('new_code_vulnerability_critical', 0),
         'new_code_vulnerabilities_high': new_code_issues.get('new_code_vulnerability_major', 0),
         'new_code_vulnerabilities_medium': new_code_issues.get('new_code_vulnerability_minor', 0),
@@ -534,7 +577,6 @@ def transform_metric_data(metric_data: Dict[str, Any]) -> Dict[str, Any]:
         'new_code_security_hotspots_medium': new_code_issues.get('new_code_security_hotspot_medium', 0),
         'new_code_security_hotspots_low': new_code_issues.get('new_code_security_hotspot_low', 0),
         'new_code_security_hotspots_to_review': new_code_issues.get('new_code_security_hotspot_to_review', 0),
-        'new_code_security_hotspots_reviewed': new_code_issues.get('new_code_security_hotspot_reviewed', 0),
         'new_code_coverage_percentage': float(metrics.get('new_coverage', 0)),
         'new_code_duplicated_lines_density': float(metrics.get('new_duplicated_lines_density', 0)),
         'new_code_lines': int(metrics.get('new_lines', 0)),
@@ -570,34 +612,40 @@ def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
             project_id, metric_date,
             bugs_total, bugs_blocker, bugs_critical, bugs_major, bugs_minor, bugs_info,
             bugs_open, bugs_confirmed, bugs_reopened, bugs_resolved, bugs_closed,
-            vulnerabilities_total, vulnerabilities_critical, vulnerabilities_high,
-            vulnerabilities_medium, vulnerabilities_low,
+            bugs_false_positive, bugs_wontfix,
+            vulnerabilities_total, vulnerabilities_blocker, vulnerabilities_critical, 
+            vulnerabilities_high, vulnerabilities_medium, vulnerabilities_low,
             vulnerabilities_open, vulnerabilities_confirmed, vulnerabilities_reopened,
             vulnerabilities_resolved, vulnerabilities_closed,
+            vulnerabilities_false_positive, vulnerabilities_wontfix,
             code_smells_total, code_smells_blocker, code_smells_critical,
             code_smells_major, code_smells_minor, code_smells_info,
+            code_smells_open, code_smells_confirmed, code_smells_reopened,
+            code_smells_resolved, code_smells_closed,
+            code_smells_false_positive, code_smells_wontfix,
             security_hotspots_total, security_hotspots_high, security_hotspots_medium,
-            security_hotspots_low, security_hotspots_to_review, security_hotspots_reviewed,
-            security_hotspots_acknowledged, security_hotspots_fixed,
+            security_hotspots_low, security_hotspots_to_review,
+            security_hotspots_acknowledged, security_hotspots_fixed, security_hotspots_safe,
             coverage_percentage, duplicated_lines_density,
             data_source_timestamp, is_carried_forward,
             new_code_bugs_total, new_code_bugs_blocker, new_code_bugs_critical,
             new_code_bugs_major, new_code_bugs_minor, new_code_bugs_info,
-            new_code_vulnerabilities_total, new_code_vulnerabilities_critical,
-            new_code_vulnerabilities_high, new_code_vulnerabilities_medium,
-            new_code_vulnerabilities_low, new_code_code_smells_total,
+            new_code_vulnerabilities_total, new_code_vulnerabilities_blocker,
+            new_code_vulnerabilities_critical, new_code_vulnerabilities_high, 
+            new_code_vulnerabilities_medium, new_code_vulnerabilities_low, new_code_code_smells_total,
             new_code_code_smells_blocker, new_code_code_smells_critical,
             new_code_code_smells_major, new_code_code_smells_minor,
             new_code_code_smells_info, new_code_security_hotspots_total,
             new_code_security_hotspots_high, new_code_security_hotspots_medium,
             new_code_security_hotspots_low, new_code_security_hotspots_to_review,
-            new_code_security_hotspots_reviewed, new_code_coverage_percentage,
+            new_code_coverage_percentage,
             new_code_duplicated_lines_density, new_code_lines, new_code_period_date
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s
         ) ON CONFLICT (project_id, metric_date) DO UPDATE SET
             bugs_total = EXCLUDED.bugs_total,
             bugs_blocker = EXCLUDED.bugs_blocker,
@@ -610,7 +658,10 @@ def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
             bugs_reopened = EXCLUDED.bugs_reopened,
             bugs_resolved = EXCLUDED.bugs_resolved,
             bugs_closed = EXCLUDED.bugs_closed,
+            bugs_false_positive = EXCLUDED.bugs_false_positive,
+            bugs_wontfix = EXCLUDED.bugs_wontfix,
             vulnerabilities_total = EXCLUDED.vulnerabilities_total,
+            vulnerabilities_blocker = EXCLUDED.vulnerabilities_blocker,
             vulnerabilities_critical = EXCLUDED.vulnerabilities_critical,
             vulnerabilities_high = EXCLUDED.vulnerabilities_high,
             vulnerabilities_medium = EXCLUDED.vulnerabilities_medium,
@@ -620,20 +671,29 @@ def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
             vulnerabilities_reopened = EXCLUDED.vulnerabilities_reopened,
             vulnerabilities_resolved = EXCLUDED.vulnerabilities_resolved,
             vulnerabilities_closed = EXCLUDED.vulnerabilities_closed,
+            vulnerabilities_false_positive = EXCLUDED.vulnerabilities_false_positive,
+            vulnerabilities_wontfix = EXCLUDED.vulnerabilities_wontfix,
             code_smells_total = EXCLUDED.code_smells_total,
             code_smells_blocker = EXCLUDED.code_smells_blocker,
             code_smells_critical = EXCLUDED.code_smells_critical,
             code_smells_major = EXCLUDED.code_smells_major,
             code_smells_minor = EXCLUDED.code_smells_minor,
             code_smells_info = EXCLUDED.code_smells_info,
+            code_smells_open = EXCLUDED.code_smells_open,
+            code_smells_confirmed = EXCLUDED.code_smells_confirmed,
+            code_smells_reopened = EXCLUDED.code_smells_reopened,
+            code_smells_resolved = EXCLUDED.code_smells_resolved,
+            code_smells_closed = EXCLUDED.code_smells_closed,
+            code_smells_false_positive = EXCLUDED.code_smells_false_positive,
+            code_smells_wontfix = EXCLUDED.code_smells_wontfix,
             security_hotspots_total = EXCLUDED.security_hotspots_total,
             security_hotspots_high = EXCLUDED.security_hotspots_high,
             security_hotspots_medium = EXCLUDED.security_hotspots_medium,
             security_hotspots_low = EXCLUDED.security_hotspots_low,
             security_hotspots_to_review = EXCLUDED.security_hotspots_to_review,
-            security_hotspots_reviewed = EXCLUDED.security_hotspots_reviewed,
             security_hotspots_acknowledged = EXCLUDED.security_hotspots_acknowledged,
             security_hotspots_fixed = EXCLUDED.security_hotspots_fixed,
+            security_hotspots_safe = EXCLUDED.security_hotspots_safe,
             coverage_percentage = EXCLUDED.coverage_percentage,
             duplicated_lines_density = EXCLUDED.duplicated_lines_density,
             data_source_timestamp = EXCLUDED.data_source_timestamp,
@@ -645,6 +705,7 @@ def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
             new_code_bugs_minor = EXCLUDED.new_code_bugs_minor,
             new_code_bugs_info = EXCLUDED.new_code_bugs_info,
             new_code_vulnerabilities_total = EXCLUDED.new_code_vulnerabilities_total,
+            new_code_vulnerabilities_blocker = EXCLUDED.new_code_vulnerabilities_blocker,
             new_code_vulnerabilities_critical = EXCLUDED.new_code_vulnerabilities_critical,
             new_code_vulnerabilities_high = EXCLUDED.new_code_vulnerabilities_high,
             new_code_vulnerabilities_medium = EXCLUDED.new_code_vulnerabilities_medium,
@@ -660,7 +721,6 @@ def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
             new_code_security_hotspots_medium = EXCLUDED.new_code_security_hotspots_medium,
             new_code_security_hotspots_low = EXCLUDED.new_code_security_hotspots_low,
             new_code_security_hotspots_to_review = EXCLUDED.new_code_security_hotspots_to_review,
-            new_code_security_hotspots_reviewed = EXCLUDED.new_code_security_hotspots_reviewed,
             new_code_coverage_percentage = EXCLUDED.new_code_coverage_percentage,
             new_code_duplicated_lines_density = EXCLUDED.new_code_duplicated_lines_density,
             new_code_lines = EXCLUDED.new_code_lines,
@@ -673,25 +733,34 @@ def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
         metric_data['bugs_major'], metric_data['bugs_minor'], metric_data['bugs_info'],
         metric_data['bugs_open'], metric_data['bugs_confirmed'], metric_data['bugs_reopened'],
         metric_data['bugs_resolved'], metric_data['bugs_closed'],
-        metric_data['vulnerabilities_total'], metric_data['vulnerabilities_critical'],
+        metric_data['bugs_false_positive'], metric_data['bugs_wontfix'],
+        metric_data['vulnerabilities_total'], metric_data['vulnerabilities_blocker'],
+        metric_data['vulnerabilities_critical'],
         metric_data['vulnerabilities_high'], metric_data['vulnerabilities_medium'],
         metric_data['vulnerabilities_low'], metric_data['vulnerabilities_open'],
         metric_data['vulnerabilities_confirmed'], metric_data['vulnerabilities_reopened'],
         metric_data['vulnerabilities_resolved'], metric_data['vulnerabilities_closed'],
+        metric_data['vulnerabilities_false_positive'], metric_data['vulnerabilities_wontfix'],
         metric_data['code_smells_total'], metric_data['code_smells_blocker'],
         metric_data['code_smells_critical'], metric_data['code_smells_major'],
         metric_data['code_smells_minor'], metric_data['code_smells_info'],
+        metric_data['code_smells_open'], metric_data['code_smells_confirmed'],
+        metric_data['code_smells_reopened'], metric_data['code_smells_resolved'],
+        metric_data['code_smells_closed'], metric_data['code_smells_false_positive'],
+        metric_data['code_smells_wontfix'],
         metric_data['security_hotspots_total'], metric_data['security_hotspots_high'],
         metric_data['security_hotspots_medium'], metric_data['security_hotspots_low'],
-        metric_data['security_hotspots_to_review'], metric_data['security_hotspots_reviewed'],
-        metric_data['security_hotspots_acknowledged'], metric_data['security_hotspots_fixed'],
+        metric_data['security_hotspots_to_review'], metric_data['security_hotspots_acknowledged'],
+        metric_data['security_hotspots_fixed'],
+        metric_data['security_hotspots_safe'],
         metric_data['coverage_percentage'], metric_data['duplicated_lines_density'],
         metric_data['data_source_timestamp'], metric_data['is_carried_forward'],
         # New code metrics values
         metric_data['new_code_bugs_total'], metric_data['new_code_bugs_blocker'],
         metric_data['new_code_bugs_critical'], metric_data['new_code_bugs_major'],
         metric_data['new_code_bugs_minor'], metric_data['new_code_bugs_info'],
-        metric_data['new_code_vulnerabilities_total'], metric_data['new_code_vulnerabilities_critical'],
+        metric_data['new_code_vulnerabilities_total'], metric_data['new_code_vulnerabilities_blocker'],
+        metric_data['new_code_vulnerabilities_critical'],
         metric_data['new_code_vulnerabilities_high'], metric_data['new_code_vulnerabilities_medium'],
         metric_data['new_code_vulnerabilities_low'], metric_data['new_code_code_smells_total'],
         metric_data['new_code_code_smells_blocker'], metric_data['new_code_code_smells_critical'],
@@ -699,7 +768,7 @@ def insert_metric(cursor, project_id: int, metric_data: Dict[str, Any]) -> None:
         metric_data['new_code_code_smells_info'], metric_data['new_code_security_hotspots_total'],
         metric_data['new_code_security_hotspots_high'], metric_data['new_code_security_hotspots_medium'],
         metric_data['new_code_security_hotspots_low'], metric_data['new_code_security_hotspots_to_review'],
-        metric_data['new_code_security_hotspots_reviewed'], metric_data['new_code_coverage_percentage'],
+        metric_data['new_code_coverage_percentage'],
         metric_data['new_code_duplicated_lines_density'], metric_data['new_code_lines'],
         metric_data['new_code_period_date']
     )

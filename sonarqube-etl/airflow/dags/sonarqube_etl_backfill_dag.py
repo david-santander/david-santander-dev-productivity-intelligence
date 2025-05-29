@@ -379,17 +379,22 @@ def load_historical_metrics(**context) -> int:
 
     try:
         # First, ensure all projects exist in the database
-        for project_key, project_name in project_map.items():
+        for project in projects:
+            project_key = project['key']
+            project_name = project['name']
+            last_analysis_date = project.get('lastAnalysisDate')
+            
             cursor.execute(
                 """
-                INSERT INTO sonarqube_metrics.sq_projects (sonarqube_project_key, project_name)
-                VALUES (%s, %s)
+                INSERT INTO sonarqube_metrics.sq_projects (sonarqube_project_key, project_name, last_analysis_date_from_sq)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (sonarqube_project_key) DO UPDATE
                 SET project_name = EXCLUDED.project_name,
+                    last_analysis_date_from_sq = EXCLUDED.last_analysis_date_from_sq,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING project_id
             """,
-                (project_key, project_name),
+                (project_key, project_name, last_analysis_date),
             )
 
         conn.commit()

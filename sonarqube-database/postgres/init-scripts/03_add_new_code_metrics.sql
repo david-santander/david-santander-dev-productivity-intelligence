@@ -43,6 +43,10 @@ ADD COLUMN IF NOT EXISTS new_code_security_hotspots_low INTEGER DEFAULT 0,
 ADD COLUMN IF NOT EXISTS new_code_security_hotspots_to_review INTEGER DEFAULT 0,
 ADD COLUMN IF NOT EXISTS new_code_security_hotspots_reviewed INTEGER DEFAULT 0;
 
+-- Add missing security hotspot "safe" status column for overall code
+ALTER TABLE sonarqube_metrics.daily_project_metrics
+ADD COLUMN IF NOT EXISTS security_hotspots_safe INTEGER DEFAULT 0;
+
 -- Create index for new code period queries
 CREATE INDEX IF NOT EXISTS idx_new_code_period_date 
 ON sonarqube_metrics.daily_project_metrics(project_id, new_code_period_date);

@@ -1,0 +1,73 @@
+{
+  "comparison_timestamp": "2025-05-29T00:11:17.260381+00:00",
+  "postgres_snapshot_time": "2025-05-29T00:11:16.166822+00:00",
+  "sonarqube_fetch_time": "2025-05-29T00:11:16.161411+00:00",
+  "projects": {
+    "dev.productivity:django-sample-app": {
+      "project_key": "dev.productivity:django-sample-app",
+      "in_postgres": true,
+      "in_sonarqube": true,
+      "discrepancies": [],
+      "metrics": {},
+      "status": "sonarqube_fetch_error",
+      "error": "404 Client Error:  for url: http://sonarqube:9000/api/measures/component?component=dev.productivity%3Adjango-sample-app&metricKeys=lines%2Cncloc%2Cclasses%2Cfunctions%2Cstatements%2Cfiles%2Cdirectories%2Cbugs%2Cvulnerabilities%2Ccode_smells%2Csecurity_hotspots%2Creliability_rating%2Csecurity_rating%2Csqale_rating%2Creliability_remediation_effort%2Csecurity_remediation_effort%2Ctechnical_debt%2Csqale_debt_ratio%2Ccoverage%2Cline_coverage%2Cbranch_coverage%2Ccovered_lines%2Cuncovered_lines%2Ccovered_conditions%2Cuncovered_conditions%2Clines_to_cover%2Cconditions_to_cover%2Cduplicated_lines_density%2Cduplicated_lines%2Cduplicated_blocks%2Cduplicated_files%2Ccomplexity%2Ccognitive_complexity%2Ccomment_lines%2Ccomment_lines_density%2Cnew_lines%2Cnew_ncloc%2Cnew_bugs%2Cnew_vulnerabilities%2Cnew_code_smells%2Cnew_security_hotspots%2Cnew_reliability_remediation_effort%2Cnew_security_remediation_effort%2Cnew_technical_debt%2Cnew_sqale_debt_ratio%2Cnew_coverage%2Cnew_line_coverage%2Cnew_branch_coverage%2Cnew_covered_lines%2Cnew_uncovered_lines%2Cnew_covered_conditions%2Cnew_uncovered_conditions%2Cnew_lines_to_cover%2Cnew_conditions_to_cover%2Cnew_duplicated_lines_density%2Cnew_duplicated_lines%2Cnew_duplicated_blocks%2Cnew_complexity%2Cnew_cognitive_complexity"
+    },
+    "dev.productivity:fastapi-sample-app": {
+      "project_key": "dev.productivity:fastapi-sample-app",
+      "in_postgres": true,
+      "in_sonarqube": true,
+      "discrepancies": [],
+      "metrics": {},
+      "status": "sonarqube_fetch_error",
+      "error": "404 Client Error:  for url: http://sonarqube:9000/api/measures/component?component=dev.productivity%3Afastapi-sample-app&metricKeys=lines%2Cncloc%2Cclasses%2Cfunctions%2Cstatements%2Cfiles%2Cdirectories%2Cbugs%2Cvulnerabilities%2Ccode_smells%2Csecurity_hotspots%2Creliability_rating%2Csecurity_rating%2Csqale_rating%2Creliability_remediation_effort%2Csecurity_remediation_effort%2Ctechnical_debt%2Csqale_debt_ratio%2Ccoverage%2Cline_coverage%2Cbranch_coverage%2Ccovered_lines%2Cuncovered_lines%2Ccovered_conditions%2Cuncovered_conditions%2Clines_to_cover%2Cconditions_to_cover%2Cduplicated_lines_density%2Cduplicated_lines%2Cduplicated_blocks%2Cduplicated_files%2Ccomplexity%2Ccognitive_complexity%2Ccomment_lines%2Ccomment_lines_density%2Cnew_lines%2Cnew_ncloc%2Cnew_bugs%2Cnew_vulnerabilities%2Cnew_code_smells%2Cnew_security_hotspots%2Cnew_reliability_remediation_effort%2Cnew_security_remediation_effort%2Cnew_technical_debt%2Cnew_sqale_debt_ratio%2Cnew_coverage%2Cnew_line_coverage%2Cnew_branch_coverage%2Cnew_covered_lines%2Cnew_uncovered_lines%2Cnew_covered_conditions%2Cnew_uncovered_conditions%2Cnew_lines_to_cover%2Cnew_conditions_to_cover%2Cnew_duplicated_lines_density%2Cnew_duplicated_lines%2Cnew_duplicated_blocks%2Cnew_complexity%2Cnew_cognitive_complexity"
+    }
+  },
+  "summary": {
+    "total_projects_postgres": 2,
+    "total_projects_sonarqube": 2,
+    "projects_with_discrepancies": 0,
+    "total_discrepancies": 0,
+    "metrics_compared": 75
+  },
+  "health_status": {
+    "overall_status": "critical",
+    "data_freshness": {
+      "postgres_latest_date": "2025-05-29",
+      "postgres_data_age_days": 0,
+      "postgres_status": "healthy",
+      "carried_forward_projects": 0,
+      "carried_forward_percentage": 0.0
+    },
+    "data_completeness": {
+      "total_unique_projects": 2,
+      "missing_in_postgres_count": 0,
+      "missing_in_sonarqube_count": 0,
+      "completeness_percentage": 100.0
+    },
+    "sync_status": {
+      "projects_in_sync": 2,
+      "projects_with_discrepancies": 0,
+      "total_discrepancies": 0,
+      "sync_percentage": 100.0
+    },
+    "critical_issues": [
+      "2 projects failed to fetch from SonarQube"
+    ],
+    "warnings": [],
+    "checks_performed": [
+      "Data freshness (PostgreSQL latest date)",
+      "Carried forward data percentage",
+      "Data completeness (missing projects)",
+      "Sync status (discrepancy analysis)",
+      "SonarQube fetch errors"
+    ]
+  },
+  "postgres_statistics": {
+    "total_projects": 2,
+    "latest_metric_date": "2025-05-29",
+    "earliest_metric_date": "2025-01-01",
+    "total_records": 298
+  },
+  "execution_date": "2025-05-29T00:11:14.991215+00:00",
+  "dag_run_id": "dataset_triggered__2025-05-29T00:11:14.991215+00:00"
+}
